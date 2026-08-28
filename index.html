@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<title>Seedream v5.0 Pro Editor</title>
+<meta name="description" content="Seedream v5.0 Pro 图片编辑，集成 AtlasCloud 与 DeepSeek 视觉分析。"/>
+<link rel="stylesheet" href="./styles.css"/>
+</head>
+<body>
+<main class="app">
+  <header class="topbar">
+    <div class="brand"><div class="logo">S5<span></span></div><div><div class="brandline"><b>Seedream Studio</b><em>Pro Edit</em></div><small>AtlasCloud + DeepSeek Vision</small></div></div>
+    <div class="top-actions">
+      <button class="balance-chip" id="atlasBalanceTop" type="button"><span>AtlasCloud</span><b>--</b></button>
+      <button class="icon-btn" id="settingsBtn" type="button">⚙ <span>API 设置</span></button>
+    </div>
+  </header>
+
+  <div class="workspace">
+    <section class="panel editor-panel">
+      <div class="section-title"><div><span class="kicker">INPUT</span><h2>准备原图</h2></div><span class="pill">最大 30MB</span></div>
+      <button id="uploadArea" class="upload-area" type="button">
+        <div id="uploadEmpty"><div class="upload-icon">⇧</div><b>拖入图片，或点击上传</b><small>JPEG / PNG / WebP / GIF</small></div>
+        <div id="uploadPreview" class="hidden preview-wrap"><img id="previewImg" alt="已上传的原图"><div class="preview-meta"><span id="fileName"></span><span id="fileSize"></span></div></div>
+      </button>
+      <input id="fileInput" type="file" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+
+      <div class="divider"></div>
+      <div class="section-title compact"><div><span class="kicker">INSTRUCTION</span><h2>告诉它怎么改</h2></div><span id="promptCount" class="muted">0 字</span></div>
+      <div class="presets" id="presets">
+        <button class="active" data-preset="custom">自己写</button><button data-preset="enhance">画质增强</button><button data-preset="stylize">风格化</button><button data-preset="remove-bg">去背景</button>
+      </div>
+      <textarea id="prompt" maxlength="2400" placeholder="比如：把背景换成雨夜的东京街头，保留人物的脸、姿势和衣服……"></textarea>
+
+      <div id="visionCard" class="vision-card">
+        <div class="vision-head"><div><span class="dot idle" id="visionDot"></span><b>DeepSeek 视觉分析</b></div><span id="visionStatus">等待上传图片</span></div>
+        <div class="vision-meta"><span>模型 <code>deepseek-v4-flash-vision-exp</code></span><span id="visionTiming">--</span></div>
+        <div id="visionSummary" class="vision-summary muted">上传图片后会自动验证视觉模型是否真的读取了图片。</div>
+        <div id="visionFacts" class="facts hidden"></div>
+        <div class="vision-actions"><button id="testVisionBtn" class="secondary" type="button">测试视觉模型</button><button id="rawBtn" class="text-btn" type="button" disabled>查看原始返回</button></div>
+        <pre id="rawBox" class="raw hidden"></pre>
+      </div>
+
+      <div class="protect-card" id="protectCard">
+        <div class="protect-head">
+          <div class="protect-title"><span class="protect-icon">♢</span><div><b>智能人物保护</b><small id="protectStatus">上传图片后自动判断</small></div></div>
+          <label class="mini-switch" title="智能人物保护总开关"><input id="personProtect" type="checkbox" checked><i></i></label>
+        </div>
+        <div class="protect-grid" id="protectOptions">
+          <label class="protect-option"><span>保持人物长相<small>维持身份、五官辨识特征与年龄感</small></span><span class="mini-switch"><input id="keepIdentity" type="checkbox" checked><i></i></span></label>
+          <label class="protect-option"><span>人脸结构保护<small>减少脸型、五官比例与位置漂移</small></span><span class="mini-switch"><input id="keepFaceStructure" type="checkbox" checked><i></i></span></label>
+          <label class="protect-option wide"><span>加强长相保护<small id="enhancedFaceHint">检测到清晰人脸时可用</small></span><span class="mini-switch"><input id="enhancedFace" type="checkbox" disabled><i></i></span></label>
+        </div>
+        <button id="sentContentBtn" class="sent-content-btn" type="button">查看实际发送内容 <span>⌄</span></button>
+        <div id="sentContentBox" class="sent-content hidden"><div class="sent-meta" id="sentMeta">等待上传图片</div><pre id="sentPrompt"></pre></div>
+      </div>
+
+      <div class="controls-grid">
+        <label>画面比例<select id="ratio"></select></label>
+        <label>输出尺寸<select id="size"></select></label>
+        <label class="switch-row wide-control"><span>Seedream 深度思考</span><input id="thinking" type="checkbox" checked><i></i></label>
+      </div>
+
+      <button id="generateBtn" class="primary" type="button">生成图片</button>
+      <div id="progressWrap" class="progress-wrap hidden"><div><span id="progressText">准备中</span><b id="progressPct">0%</b></div><progress id="progress" max="100" value="0"></progress></div>
+    </section>
+
+    <section class="panel output-panel">
+      <div class="section-title"><div><span class="kicker">OUTPUT</span><h2>生成结果</h2></div><button id="downloadBtn" class="secondary" type="button" disabled>下载</button></div>
+      <div class="result-stage" id="resultStage"><div class="empty-result"><div>✦</div><b>结果会出现在这里</b><small>上传图片，写下修改要求，然后生成。</small></div><img id="resultImg" class="hidden" alt="生成结果"></div>
+
+      <div class="balances">
+        <article><div class="balance-title"><span>AtlasCloud 余额</span><button id="refreshAtlas" type="button">刷新</button></div><strong id="atlasTotal">--</strong><div class="mini-grid"><span>现金 <b id="atlasCash">--</b></span><span>赠送 <b id="atlasBonus">--</b></span></div><small id="atlasState">未查询</small></article>
+        <article><div class="balance-title"><span>DeepSeek 余额</span><button id="refreshDeepseek" type="button">刷新</button></div><strong id="dsTotal">--</strong><div class="mini-grid"><span>充值 <b id="dsTopup">--</b></span><span>赠送 <b id="dsGrant">--</b></span></div><small id="dsState">未查询</small></article>
+      </div>
+
+      <div class="history-head"><b>最近生成</b><button id="clearHistory" class="text-btn" type="button">清空</button></div>
+      <div id="history" class="history"></div>
+    </section>
+  </div>
+</main>
+
+<div id="settingsModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+  <div class="modal-card">
+    <div class="modal-head"><div><span class="kicker">API SETTINGS</span><h2 id="settingsTitle">连接服务</h2></div><button id="closeSettings" class="close" type="button">×</button></div>
+    <label>AtlasCloud API Key<div class="key-row"><input id="atlasKey" type="password" placeholder="apikey-... / sk-..." autocomplete="off"><button data-eye="atlasKey" type="button">显示</button></div><small>用于 Seedream 生成、任务轮询和 AtlasCloud 余额查询。</small></label>
+    <div class="divider"></div>
+    <label>DeepSeek API Key<div class="key-row"><input id="deepseekKey" type="password" placeholder="sk-..." autocomplete="off"><button data-eye="deepseekKey" type="button">显示</button></div><small>用于余额查询和 <code>deepseek-v4-flash-vision-exp</code> 图片分析。</small></label>
+    <p class="security-note">Key 只保存在当前设备浏览器的 localStorage。服务端仅在当前请求中转发，不写入磁盘。</p>
+    <div class="modal-actions"><button id="clearKeys" class="danger" type="button">清除保存</button><button id="saveKeys" class="primary small" type="button">保存 API 设置</button></div>
+  </div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+<script src="./app.js"></script>
+</body></html>
