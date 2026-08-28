@@ -42,11 +42,24 @@
         <pre id="rawBox" class="raw hidden"></pre>
       </div>
 
+      <div class="protect-card" id="protectCard">
+        <div class="protect-head">
+          <div class="protect-title"><span class="protect-icon">♢</span><div><b>智能人物保护</b><small id="protectStatus">上传图片后自动判断</small></div></div>
+          <label class="mini-switch" title="智能人物保护总开关"><input id="personProtect" type="checkbox" checked><i></i></label>
+        </div>
+        <div class="protect-grid" id="protectOptions">
+          <label class="protect-option"><span>保持人物长相<small>维持身份、五官辨识特征与年龄感</small></span><span class="mini-switch"><input id="keepIdentity" type="checkbox" checked><i></i></span></label>
+          <label class="protect-option"><span>人脸结构保护<small>减少脸型、五官比例与位置漂移</small></span><span class="mini-switch"><input id="keepFaceStructure" type="checkbox" checked><i></i></span></label>
+          <label class="protect-option wide"><span>加强长相保护<small id="enhancedFaceHint">检测到清晰人脸时可用</small></span><span class="mini-switch"><input id="enhancedFace" type="checkbox" disabled><i></i></span></label>
+        </div>
+        <button id="sentContentBtn" class="sent-content-btn" type="button">查看实际发送内容 <span>⌄</span></button>
+        <div id="sentContentBox" class="sent-content hidden"><div class="sent-meta" id="sentMeta">等待上传图片</div><pre id="sentPrompt"></pre></div>
+      </div>
+
       <div class="controls-grid">
         <label>画面比例<select id="ratio"></select></label>
         <label>输出尺寸<select id="size"></select></label>
-        <label class="switch-row"><span>Seedream 深度思考</span><input id="thinking" type="checkbox" checked><i></i></label>
-        <label class="switch-row"><span>智能人物保护</span><input id="personProtect" type="checkbox" checked><i></i></label>
+        <label class="switch-row wide-control"><span>Seedream 深度思考</span><input id="thinking" type="checkbox" checked><i></i></label>
       </div>
 
       <button id="generateBtn" class="primary" type="button">生成图片</button>
