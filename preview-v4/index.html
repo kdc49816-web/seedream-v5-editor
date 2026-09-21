@@ -1,0 +1,488 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <title>Seedream v5.0 Pro Editor · Preview 4</title>
+  <link rel="stylesheet" href="../styles.css" />
+
+<style>
+/* Preview overrides: header/tabs scroll away normally */
+.topbar{position:relative!important;top:auto!important;z-index:auto!important}
+.tabs{position:relative!important;top:auto!important;z-index:auto!important}
+.album-view-switch{display:inline-flex;align-items:center;gap:4px;padding:4px;background:#fff;border:1px solid var(--line);border-radius:999px}
+.album-view-switch button{border:0;background:transparent;border-radius:999px;padding:8px 12px;font-size:11px;font-weight:700;color:#666b75;white-space:nowrap}
+.album-view-switch button.active{background:var(--red);color:#fff}
+.album-stack{background:#fff;border:1px solid var(--line);border-radius:18px;box-shadow:var(--shadow);padding:12px;margin-top:2px}
+.stack-topline{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.stack-counter{font-size:12px;font-weight:800;color:#2f3136}.stack-hint{font-size:10px;color:var(--muted)}
+.stack-viewport{position:relative;height:560px;overflow:hidden;border-radius:22px;background:linear-gradient(180deg,#fafafb 0%,#f2f3f6 100%);border:1px solid #ececf0}
+.stack-deck{position:relative;width:100%;height:100%}
+.stack-card{position:absolute;left:50%;top:50%;width:min(82%,360px);height:min(74%,520px);transform:translate3d(-50%,-50%,0);transform-origin:center center;transition:transform .34s cubic-bezier(.22,.8,.22,1),opacity .26s ease;pointer-events:none;will-change:transform,opacity;backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.stack-card-shell{width:100%;height:100%;background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:24px;overflow:hidden;box-shadow:0 18px 40px rgba(24,28,36,.16)}
+.stack-card.current{pointer-events:auto;z-index:5}.stack-card.current .stack-card-shell{touch-action:pan-y;will-change:transform;user-select:none;-webkit-user-select:none}
+.stack-card.depth-0{transform:translate3d(-50%,-50%,0) scale(1);opacity:1}.stack-card.depth-1{transform:translate3d(calc(-50% + 14px),calc(-50% + 18px),0) scale(.965);opacity:.96}.stack-card.depth-2{transform:translate3d(calc(-50% + 27px),calc(-50% + 34px),0) scale(.93);opacity:.90}.stack-card.depth-3{transform:translate3d(calc(-50% + 39px),calc(-50% + 49px),0) scale(.9);opacity:.76}
+.stack-image-wrap{position:relative;width:100%;height:100%;background:#f4f4f6}.stack-image{width:100%;height:100%;object-fit:cover;display:block;-webkit-user-drag:none;user-select:none}
+.stack-meta{position:absolute;left:12px;right:12px;bottom:12px;background:rgba(22,22,24,.54);backdrop-filter:blur(10px);color:#fff;border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:3px}.stack-meta strong{font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.stack-meta span{font-size:10px;opacity:.92}
+.stack-nav{display:flex;justify-content:center;gap:10px;margin-top:12px}.stack-nav .btn{min-width:110px}.stack-swipe-hint{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);font-size:10px;color:#747881;background:rgba(255,255,255,.82);padding:6px 10px;border-radius:999px;border:1px solid rgba(0,0,0,.05);white-space:nowrap}
+@media(max-width:720px){.album-actions{width:100%;flex-wrap:wrap}.album-view-switch{width:100%;justify-content:space-between}.album-view-switch button{flex:1}.stack-topline{flex-direction:column;align-items:flex-start;gap:4px}.stack-viewport{height:470px;border-radius:18px}.stack-card{width:min(86%,340px);height:min(78%,440px)}.stack-nav .btn{flex:1;min-width:0}}
+@media(max-width:380px){.stack-viewport{height:420px}.stack-card{width:min(88%,320px);height:min(80%,390px)}}
+
+/* v4: fixed DOM card pool + compositor-friendly transforms */
+.stack-viewport{contain:layout paint style;isolation:isolate;-webkit-transform:translateZ(0);transform:translateZ(0)}
+.stack-deck{contain:layout paint style;perspective:1000px}
+.stack-card{
+  transition:none!important;
+  will-change:transform,opacity;
+  backface-visibility:hidden;
+  -webkit-backface-visibility:hidden;
+  transform-style:preserve-3d;
+}
+.stack-card-shell{
+  box-shadow:0 12px 28px rgba(24,28,36,.13);
+  backface-visibility:hidden;
+  -webkit-backface-visibility:hidden;
+  contain:paint;
+}
+.stack-card.current .stack-card-shell{touch-action:pan-y}
+.stack-meta{backdrop-filter:none!important;-webkit-backdrop-filter:none!important;background:rgba(22,22,24,.58)}
+.stack-image{backface-visibility:hidden;-webkit-backface-visibility:hidden;transform:translateZ(0)}
+.stack-card.role-current{z-index:6;opacity:1;transform:translate3d(-50%,-50%,0) scale(1)}
+.stack-card.role-next1{z-index:5;opacity:.96;transform:translate3d(calc(-50% + 14px),calc(-50% + 18px),0) scale(.965)}
+.stack-card.role-next2{z-index:4;opacity:.90;transform:translate3d(calc(-50% + 27px),calc(-50% + 34px),0) scale(.93)}
+.stack-card.role-next3{z-index:3;opacity:.76;transform:translate3d(calc(-50% + 39px),calc(-50% + 49px),0) scale(.90)}
+.stack-card.role-prev{z-index:5;opacity:0;transform:translate3d(calc(-50% - 18px),calc(-50% + 18px),0) scale(.965);pointer-events:none}
+.stack-card.role-current{pointer-events:auto}
+
+</style>
+
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand-wrap">
+        <div class="brand-mark">S5</div>
+        <div class="brand-copy">
+          <div class="brand-line"><h1>Seedream Studio</h1><span class="pro-badge">PRO EDIT</span></div>
+          <p>Seedream v5.0 Pro · AtlasCloud API</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="balance-chip" id="balanceBtn" type="button" aria-label="刷新余额">
+          <span>余额</span><strong id="balanceValue">--</strong>
+        </button>
+        <button class="btn btn-outline" id="apiBtn" type="button">API 设置</button>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="页面切换">
+      <button class="tab active" data-tab="editor" type="button">图片编辑</button>
+      <button class="tab" data-tab="history" type="button">生成记录 <span class="count" id="historyCount">0</span></button>
+      <button class="tab" data-tab="album" type="button">相册 <span class="count" id="albumCount">0</span></button>
+    </nav>
+
+    <main>
+      <section class="tab-panel active" id="panel-editor" data-panel="editor">
+        <div class="editor-grid">
+          <section class="card controls-card">
+            <div class="section-head">
+              <div><span class="eyebrow">INPUT</span><h2>准备原图</h2></div>
+              <span class="muted" id="sourceMeta">最大 30MB</span>
+            </div>
+
+            <label class="upload-zone" id="editorDropZone">
+              <input id="editorFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/tiff,image/heic,image/heif,.heic,.heif" hidden />
+              <div id="uploadEmpty" class="upload-empty">
+                <div class="upload-icon">＋</div>
+                <strong>拖入图片，或点击上传</strong>
+                <span>JPEG / PNG / WebP / HEIC 等</span>
+              </div>
+              <img id="sourcePreview" class="source-preview hidden" alt="原图预览" />
+              <div class="source-overlay hidden" id="sourceOverlay">点击更换原图</div>
+            </label>
+
+            <div class="field-block">
+              <div class="field-title"><label for="prompt">告诉它怎么改</label><span id="promptCount">0 字</span></div>
+              <textarea id="prompt" rows="7" placeholder="比如：把背景换成雨夜的东京街头，保留人物的脸、姿势和衣服……"></textarea>
+              <div class="quick-prompts">
+                <button type="button" data-prompt="提升画面清晰度、细节和质感，保持原始构图与人物身份不变。">画质增强</button>
+                <button type="button" data-prompt="在保持主体身份、姿势和构图基本不变的前提下进行风格化处理。">风格化</button>
+                <button type="button" data-prompt="移除背景并输出干净的透明 PNG，主体边缘自然完整。">去背景</button>
+              </div>
+            </div>
+
+            <details class="settings" open>
+              <summary>生成设置</summary>
+              <div class="setting-row">
+                <div><strong>智能人物保护</strong><span>有 DeepSeek Key 时自动判断人物与人脸</span></div>
+                <label class="switch"><input id="personProtect" type="checkbox" checked /><span></span></label>
+              </div>
+              <div class="analysis-status" id="analysisStatus">上传图片后自动判断</div>
+              <div class="setting-row">
+                <div><strong>深度思考</strong><span>开启自动提示词深度优化</span></div>
+                <select id="thinking"><option value="enabled">启用</option><option value="disabled">关闭</option></select>
+              </div>
+              <div class="setting-row">
+                <div><strong>提示词优化</strong><span>标准模式质量更高，快速模式更快</span></div>
+                <select id="optimization"><option value="standard">标准</option><option value="fast">快速</option></select>
+              </div>
+            </details>
+
+            <div class="field-block compact">
+              <div class="field-title"><span>输出比例</span><span id="ratioHint">上传后自动识别</span></div>
+              <div class="ratio-grid" id="ratioGrid"></div>
+            </div>
+
+            <div class="field-block compact">
+              <div class="field-title"><span>分辨率</span><span>Seedream v5.0 Pro</span></div>
+              <div class="resolution-grid">
+                <button class="resolution active" data-resolution="1K" type="button"><strong>1K</strong><span>约 1024</span></button>
+                <button class="resolution" data-resolution="1.5K" type="button"><strong>1.5K</strong><span>约 1536</span></button>
+                <button class="resolution" data-resolution="2K" type="button"><strong>2K</strong><span>约 2048</span></button>
+              </div>
+            </div>
+
+            <button class="btn btn-primary generate-btn" id="generateBtn" type="button">开始编辑</button>
+          </section>
+
+          <section class="card result-card">
+            <div class="result-head">
+              <div><span class="eyebrow">OUTPUT</span><h2>结果画布</h2><p id="resultSubtitle">等待上传原图</p></div>
+              <div class="result-actions">
+                <button class="btn btn-light hidden" id="addResultAlbumBtn" type="button">加入相册</button>
+                <button class="btn btn-light hidden" id="downloadResultBtn" type="button">保存图片</button>
+              </div>
+            </div>
+            <div class="canvas" id="resultCanvas">
+              <div class="canvas-placeholder" id="canvasPlaceholder">
+                <div class="placeholder-icon">◫</div>
+                <strong>这里会显示处理结果</strong>
+                <span>上传原图、写好修改要求，然后点击开始编辑。</span>
+              </div>
+              <img id="resultImage" class="result-image hidden zoomable" alt="Seedream 处理结果" />
+              <div class="processing hidden" id="processingBox">
+                <div class="spinner"></div><strong id="processingText">正在处理</strong>
+                <div class="progress"><i id="progressBar"></i></div>
+              </div>
+            </div>
+            <p class="storage-note">生成记录会保存在当前浏览器中，不再限制 12 条；只有你主动删除才会移除。</p>
+          </section>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="panel-history" data-panel="history">
+        <div class="page-head">
+          <div><span class="eyebrow">HISTORY</span><h2>生成记录</h2><p>生成过的结果会一直保留在这台设备的浏览器里。</p></div>
+          <button class="btn btn-outline danger-outline" id="clearHistoryBtn" type="button">清空记录</button>
+        </div>
+        <div class="gallery-grid" id="historyGrid"></div>
+        <div class="empty-state hidden" id="historyEmpty"><strong>还没有生成记录</strong><span>完成一次图片编辑后会自动出现在这里。</span></div>
+      </section>
+
+      <section class="tab-panel" id="panel-album" data-panel="album">
+        <div class="page-head album-head">
+          <div><span class="eyebrow">ALBUM</span><h2>我的相册</h2><p>可以从本机自由上传，也可以把生成结果加入相册。拖住“≡”即可调整顺序。</p></div>
+          <div class="album-actions">
+            <label class="btn btn-primary upload-button">上传图片<input id="albumUpload" type="file" accept="image/*,.heic,.heif" multiple hidden /></label>
+            <button class="btn btn-outline" id="toggleArrangeBtn" type="button">整理顺序</button>
+            <div class="album-view-switch" id="albumViewSwitch">
+              <button class="active" data-album-view="grid" type="button">宫格</button>
+              <button data-album-view="stack" type="button">卡片</button>
+            </div>
+          </div>
+        </div>
+        <div class="album-toolbar hidden" id="arrangeTip">整理模式已开启：拖住图片右上角的“≡”移动；手机也可以拖。也可用左右箭头微调。</div>
+        <div class="gallery-grid album-grid" id="albumGrid"></div>
+        <div class="album-stack hidden" id="albumStackView">
+          <div class="stack-topline">
+            <span class="stack-counter" id="albumStackCounter">1 / 1</span>
+            <span class="stack-hint">右滑下一张，左滑上一张 · 首尾循环 · 双击放大</span>
+          </div>
+          <div class="stack-viewport">
+            <div class="stack-deck" id="albumStackDeck"></div>
+          </div>
+          <div class="stack-nav">
+            <button class="btn btn-light" id="stackPrevBtn" type="button">上一张</button>
+            <button class="btn btn-light" id="stackNextBtn" type="button">下一张</button>
+          </div>
+        </div>
+        <div class="empty-state hidden" id="albumEmpty"><strong>相册还是空的</strong><span>点“上传图片”，或者在生成记录里点“加入相册”。</span></div>
+        <div class="pagination hidden" id="albumPagination">
+          <button class="btn btn-light" id="prevPageBtn" type="button">上一页</button>
+          <span id="pageInfo">1 / 1</span>
+          <button class="btn btn-light" id="nextPageBtn" type="button">下一页</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog class="modal" id="apiModal">
+    <form method="dialog" class="modal-card" id="apiForm">
+      <div class="modal-head"><div><span class="eyebrow">API</span><h2>API 设置</h2></div><button class="icon-btn" value="cancel" aria-label="关闭">×</button></div>
+      <label>AtlasCloud API Key<input id="atlasKeyInput" type="password" autocomplete="off" placeholder="apikey-..." /></label>
+      <label>DeepSeek API Key <span class="optional">可选，用于人物分析</span><input id="deepseekKeyInput" type="password" autocomplete="off" placeholder="sk-..." /></label>
+      <details class="advanced-api">
+        <summary>高级设置</summary>
+        <label>兼容代理地址 <span class="optional">可留空</span><input id="proxyBaseInput" type="url" placeholder="例如 https://your-domain.com" /></label>
+        <p>留空时浏览器直接请求 AtlasCloud / DeepSeek；若部署环境限制跨域，可填写你自己的兼容代理。</p>
+      </details>
+      <p class="privacy-note">Key 只保存在当前浏览器，不写进网页源码。</p>
+      <div class="modal-actions"><button class="btn btn-light" id="clearKeysBtn" type="button">清除</button><button class="btn btn-primary" id="saveKeysBtn" type="button">保存</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="lightbox" id="lightbox">
+    <button class="lightbox-close" id="lightboxClose" type="button" aria-label="关闭">×</button>
+    <div class="lightbox-stage" id="lightboxStage">
+      <img id="lightboxImage" alt="图片预览" />
+    </div>
+    <div class="lightbox-tip">双击 / 双击触控：放大或还原</div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="../app.js"></script>
+
+
+<script>
+(()=>{
+  const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+  const mod=(n,m)=>((n%m)+m)%m;
+  const ROLE_CLASSES=['role-current','role-next1','role-next2','role-next3','role-prev','current'];
+  let view='grid', items=[], index=0, animating=false, raf=0, pending=null;
+  let currentEl=null,next1El=null,next2El=null,next3El=null,prevEl=null;
+  let active=false,sx=0,sy=0,dx=0,dy=0,moved=false,startTime=0,lastTap=0;
+  const urlCache=new Map();
+
+  function srcFor(item){
+    if(!item)return '';
+    if(item.blob){
+      if(urlCache.has(item.id)) return urlCache.get(item.id);
+      const u=URL.createObjectURL(item.blob); urlCache.set(item.id,u); return u;
+    }
+    return item.url||item.dataUrl||'';
+  }
+  function pruneUrls(){
+    const ids=new Set(items.map(x=>x.id));
+    for(const [id,u] of urlCache){if(!ids.has(id)){URL.revokeObjectURL(u);urlCache.delete(id)}}
+  }
+  function revokeAll(){for(const u of urlCache.values())URL.revokeObjectURL(u);urlCache.clear()}
+  async function getAlbum(){
+    return new Promise(resolve=>{
+      const q=indexedDB.open('seedream-studio-db',1);
+      q.onerror=()=>resolve([]);
+      q.onupgradeneeded=()=>{};
+      q.onsuccess=()=>{
+        try{
+          const tx=q.result.transaction('album','readonly'), r=tx.objectStore('album').getAll();
+          r.onsuccess=()=>resolve((r.result||[]).sort((a,b)=>(a.order??0)-(b.order??0)));
+          r.onerror=()=>resolve([]);
+        }catch{resolve([])}
+      };
+    });
+  }
+  function lightbox(src){
+    const d=$('#lightbox'),im=$('#lightboxImage'); if(!d||!im||!src)return;
+    im.src=src; im.classList.add('zoomed'); if(!d.open)d.showModal();
+  }
+  function createCard(){
+    const el=document.createElement('article');
+    el.className='stack-card';
+    el.innerHTML='<div class="stack-card-shell"><div class="stack-image-wrap"><img class="stack-image" draggable="false" alt=""><div class="stack-meta"><strong></strong><span></span></div></div></div>';
+    return el;
+  }
+  function ensurePool(){
+    const deck=$('#albumStackDeck'); if(!deck)return;
+    if(currentEl&&currentEl.isConnected)return;
+    deck.replaceChildren();
+    next3El=createCard(); next2El=createCard(); next1El=createCard(); prevEl=createCard(); currentEl=createCard();
+    deck.append(next3El,next2El,next1El,prevEl,currentEl);
+    const hint=document.createElement('div');
+    hint.className='stack-swipe-hint';
+    hint.textContent='右滑下一张 · 左滑上一张 · 首尾循环';
+    deck.append(hint);
+    deck.addEventListener('pointerdown',onDown,{passive:true});
+    deck.addEventListener('pointermove',onMove,{passive:false});
+    deck.addEventListener('pointerup',onUp,{passive:false});
+    deck.addEventListener('pointercancel',onCancel,{passive:true});
+    deck.addEventListener('dblclick',e=>{if(e.target.closest('.role-current .stack-card-shell')){e.preventDefault();lightbox(srcFor(items[index]))}});
+  }
+  function role(el,name){
+    ROLE_CLASSES.forEach(x=>el.classList.remove(x));
+    el.classList.add('stack-card',name);
+    if(name==='role-current')el.classList.add('current');
+    el.style.transform=''; el.style.opacity=''; el.style.pointerEvents='';
+  }
+  function hydrate(el,item,absoluteIndex){
+    const img=$('.stack-image',el), strong=$('.stack-meta strong',el), span=$('.stack-meta span',el);
+    const src=srcFor(item);
+    if(img.dataset.itemId!==String(item?.id||'')){
+      img.dataset.itemId=String(item?.id||'');
+      img.src=src;
+      if(img.decode) img.decode().catch(()=>{});
+    }
+    strong.textContent=item?.name||'相册图片';
+    span.textContent='第 '+(absoluteIndex+1)+' 张';
+  }
+  function idx(off){return mod(index+off,items.length)}
+  function hydrateAll(){
+    if(!items.length)return;
+    hydrate(currentEl,items[idx(0)],idx(0));
+    hydrate(next1El,items[idx(1)],idx(1));
+    hydrate(next2El,items[idx(2)],idx(2));
+    hydrate(next3El,items[idx(3)],idx(3));
+    hydrate(prevEl,items[idx(-1)],idx(-1));
+    $('#albumStackCounter').textContent=(index+1)+' / '+items.length;
+    $('#stackPrevBtn').disabled=items.length<=1; $('#stackNextBtn').disabled=items.length<=1;
+    preloadAround();
+  }
+  function preloadAround(){
+    if(!items.length)return;
+    for(let o=-3;o<=7;o++){
+      const item=items[idx(o)], src=srcFor(item); if(!src)continue;
+      const im=new Image(); im.decoding='async'; im.src=src; if(im.decode)im.decode().catch(()=>{});
+    }
+  }
+  function resetRoles(){
+    role(currentEl,'role-current'); role(next1El,'role-next1'); role(next2El,'role-next2'); role(next3El,'role-next3'); role(prevEl,'role-prev');
+  }
+  function showEmpty(){
+    const deck=$('#albumStackDeck'); deck.replaceChildren();
+    const empty=document.createElement('div'); empty.className='empty-state'; empty.innerHTML='<strong>相册还是空的</strong><span>先上传几张图片再切到卡片模式。</span>';
+    deck.append(empty); currentEl=next1El=next2El=next3El=prevEl=null;
+    $('#albumStackCounter').textContent='0 / 0'; $('#stackPrevBtn').disabled=true; $('#stackNextBtn').disabled=true;
+  }
+  function drawStatic(){
+    if(!items.length){showEmpty();return}
+    ensurePool(); resetRoles(); hydrateAll();
+  }
+  async function refresh(){
+    const currentId=items[index]?.id;
+    items=await getAlbum(); pruneUrls();
+    if(currentId){const p=items.findIndex(x=>x.id===currentId); if(p>=0)index=p}
+    index=items.length?mod(index,items.length):0;
+    if(view==='stack')drawStatic();
+  }
+  function setView(v){
+    view=v;
+    $$('#albumViewSwitch [data-album-view]').forEach(b=>b.classList.toggle('active',b.dataset.albumView===v));
+    $('#albumGrid').classList.toggle('hidden',v==='stack');
+    $('#albumPagination').classList.toggle('hidden',v==='stack');
+    $('#albumStackView').classList.toggle('hidden',v!=='stack');
+    $('#toggleArrangeBtn').disabled=v==='stack';
+    if(v==='stack')refresh();
+  }
+  function tf(x,y,scale=1,rot=0){return `translate3d(calc(-50% + ${x}px),calc(-50% + ${y}px),0) scale(${scale}) rotate(${rot}deg)`}
+  function applyFrame(){
+    raf=0; if(!pending||!active||animating)return;
+    const {x,y}=pending, ax=Math.abs(x), p=Math.min(1,ax/130);
+    currentEl.style.transform=tf(x,Math.max(-15,Math.min(15,y*.07)),1,x/30);
+    currentEl.style.opacity=String(Math.max(.62,1-ax/560));
+    if(x>0){
+      next1El.style.transform=tf(14*(1-p),18*(1-p),.965+.035*p); next1El.style.opacity=String(.96+.04*p);
+      next2El.style.transform=tf(27-13*p,34-16*p,.93+.035*p); next2El.style.opacity=String(.90+.06*p);
+      next3El.style.transform=tf(39-12*p,49-15*p,.90+.03*p); next3El.style.opacity=String(.76+.14*p);
+      prevEl.style.opacity='0';
+    }else if(x<0){
+      prevEl.style.transform=tf(-18*(1-p),18*(1-p),.965+.035*p); prevEl.style.opacity=String(p);
+    }
+  }
+  function onDown(e){
+    if(view!=='stack'||animating||items.length<=1||!e.target.closest('.role-current .stack-card-shell'))return;
+    active=true;moved=false;sx=e.clientX;sy=e.clientY;dx=dy=0;startTime=performance.now();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  }
+  function onMove(e){
+    if(!active||animating)return;
+    dx=e.clientX-sx;dy=e.clientY-sy; if(Math.abs(dx)>5)moved=true;
+    if(Math.abs(dx)>Math.abs(dy)){
+      e.preventDefault(); pending={x:dx,y:dy};
+      if(!raf)raf=requestAnimationFrame(applyFrame);
+    }
+  }
+  function clearInline(){
+    for(const el of [currentEl,next1El,next2El,next3El,prevEl]){if(el){el.style.transform='';el.style.opacity=''}}
+  }
+  async function animateSpring(){
+    const opts={duration:300,easing:'cubic-bezier(.22,1,.36,1)',fill:'forwards'};
+    const jobs=[currentEl.animate([{transform:getComputedStyle(currentEl).transform,opacity:getComputedStyle(currentEl).opacity},{transform:tf(0,0),opacity:1}],opts)];
+    if(dx>0){
+      jobs.push(next1El.animate([{transform:getComputedStyle(next1El).transform},{transform:tf(14,18,.965)}],opts));
+      jobs.push(next2El.animate([{transform:getComputedStyle(next2El).transform},{transform:tf(27,34,.93)}],opts));
+      jobs.push(next3El.animate([{transform:getComputedStyle(next3El).transform},{transform:tf(39,49,.90)}],opts));
+    }else if(dx<0){
+      jobs.push(prevEl.animate([{transform:getComputedStyle(prevEl).transform,opacity:getComputedStyle(prevEl).opacity},{transform:tf(-18,18,.965),opacity:0}],opts));
+    }
+    await Promise.all(jobs.map(a=>a.finished.catch(()=>{}))); jobs.forEach(a=>a.cancel()); clearInline();
+  }
+  async function animateNext(){
+    animating=true;
+    const w=$('.stack-viewport')?.clientWidth||window.innerWidth;
+    const opts={duration:285,easing:'cubic-bezier(.18,.82,.23,1)',fill:'forwards'};
+    const jobs=[
+      currentEl.animate([{transform:getComputedStyle(currentEl).transform,opacity:getComputedStyle(currentEl).opacity},{transform:tf(w+180,0,1,13),opacity:0}],opts),
+      next1El.animate([{transform:getComputedStyle(next1El).transform,opacity:getComputedStyle(next1El).opacity},{transform:tf(0,0,1),opacity:1}],opts),
+      next2El.animate([{transform:getComputedStyle(next2El).transform,opacity:getComputedStyle(next2El).opacity},{transform:tf(14,18,.965),opacity:.96}],opts),
+      next3El.animate([{transform:getComputedStyle(next3El).transform,opacity:getComputedStyle(next3El).opacity},{transform:tf(27,34,.93),opacity:.90}],opts)
+    ];
+    await Promise.all(jobs.map(a=>a.finished.catch(()=>{}))); jobs.forEach(a=>a.cancel());
+    index=idx(1);
+    const oldCurrent=currentEl, oldPrev=prevEl;
+    currentEl=next1El; next1El=next2El; next2El=next3El; next3El=oldPrev; prevEl=oldCurrent;
+    resetRoles();
+    hydrate(next3El,items[idx(3)],idx(3)); hydrate(prevEl,items[idx(-1)],idx(-1));
+    $('#albumStackCounter').textContent=(index+1)+' / '+items.length; clearInline(); preloadAround(); animating=false;
+  }
+  async function animatePrev(){
+    animating=true;
+    const w=$('.stack-viewport')?.clientWidth||window.innerWidth;
+    const opts={duration:285,easing:'cubic-bezier(.18,.82,.23,1)',fill:'forwards'};
+    const jobs=[
+      currentEl.animate([{transform:getComputedStyle(currentEl).transform,opacity:getComputedStyle(currentEl).opacity},{transform:tf(-(w+180),0,1,-13),opacity:0}],opts),
+      prevEl.animate([{transform:getComputedStyle(prevEl).transform,opacity:getComputedStyle(prevEl).opacity},{transform:tf(0,0,1),opacity:1}],opts),
+      next1El.animate([{transform:getComputedStyle(next1El).transform},{transform:tf(27,34,.93)}],opts),
+      next2El.animate([{transform:getComputedStyle(next2El).transform},{transform:tf(39,49,.90)}],opts)
+    ];
+    await Promise.all(jobs.map(a=>a.finished.catch(()=>{}))); jobs.forEach(a=>a.cancel());
+    index=idx(-1);
+    const oldCurrent=currentEl, oldNext3=next3El, oldPrev=prevEl;
+    currentEl=oldPrev; next3El=next2El; next2El=next1El; next1El=oldCurrent; prevEl=oldNext3;
+    resetRoles();
+    hydrate(prevEl,items[idx(-1)],idx(-1)); hydrate(next1El,items[idx(1)],idx(1));
+    $('#albumStackCounter').textContent=(index+1)+' / '+items.length; clearInline(); preloadAround(); animating=false;
+  }
+  async function finishSwipe(direction){
+    if(animating||items.length<=1)return;
+    if(direction>0)await animateNext(); else await animatePrev();
+  }
+  async function onUp(e){
+    if(!active||animating)return;
+    active=false;
+    if(raf){cancelAnimationFrame(raf);raf=0} pending=null;
+    const elapsed=Math.max(1,performance.now()-startTime), velocity=Math.abs(dx)/elapsed;
+    const swipe=(Math.abs(dx)>68||(Math.abs(dx)>34&&velocity>.38))&&Math.abs(dx)>Math.abs(dy);
+    if(swipe){await finishSwipe(dx>0?1:-1);return}
+    await animateSpring();
+    if(!moved){
+      const now=Date.now();
+      if(e.pointerType!=='mouse'&&now-lastTap<330){lightbox(srcFor(items[index]));lastTap=0}else lastTap=now;
+    }
+  }
+  function onCancel(){if(!active)return;active=false;if(raf){cancelAnimationFrame(raf);raf=0}pending=null;animateSpring()}
+  function programmatic(delta){if(animating||items.length<=1)return; dx=delta>0?1:-1;dy=0;finishSwipe(delta>0?1:-1)}
+
+  document.addEventListener('DOMContentLoaded',()=>{
+    $('#albumViewSwitch')?.addEventListener('click',e=>{const b=e.target.closest('[data-album-view]');if(b)setView(b.dataset.albumView)});
+    $('#stackPrevBtn')?.addEventListener('click',()=>programmatic(-1));
+    $('#stackNextBtn')?.addEventListener('click',()=>programmatic(1));
+    $('#albumUpload')?.addEventListener('change',()=>setTimeout(()=>{if(view==='stack')refresh()},450));
+    setView('grid');
+  });
+  window.addEventListener('beforeunload',revokeAll);
+})();
+</script>
+
+</body>
+</html>
