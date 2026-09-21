@@ -391,7 +391,7 @@
   function albumCard(item,index){
     const src=trackedSrc(item); return `<article class="media-card" data-id="${escapeHtml(item.id)}"><button class="drag-handle" type="button" aria-label="拖动调整顺序">≡</button><img class="media-thumb zoomable" src="${escapeHtml(src)}" data-full-src="${escapeHtml(src)}" alt="${escapeHtml(item.name||'相册图片')}" /><div class="media-info"><span class="meta">${escapeHtml(item.name||'相册图片')}</span><span class="prompt-line">${escapeHtml(formatTime(item.createdAt))}</span></div><div class="reorder-actions"><button type="button" data-action="left">← 前移</button><button type="button" data-action="right">后移 →</button></div><div class="card-actions"><button type="button" data-action="open">查看</button><button type="button" class="danger" data-action="delete">删除</button></div></article>`;
   }
-  function updateAlbumViewSwitch(){ $('#albumViewSwitch [data-album-view]').forEach(btn=>btn.classList.toggle('active',btn.dataset.albumView===state.albumView)); }
+  function updateAlbumViewSwitch(){ $$('#albumViewSwitch [data-album-view]').forEach(btn=>btn.classList.toggle('active',btn.dataset.albumView===state.albumView)); }
   function setAlbumView(v){ state.albumView=v==='stack'?'stack':'grid'; if(state.albumView==='stack')state.arranging=false; renderAlbum(); }
   function renderAlbum(){
     updateAlbumViewSwitch();
