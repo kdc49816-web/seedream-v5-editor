@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#ffffff" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <title>Seedream v5.0 Pro Editor</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand-wrap">
+        <div class="brand-mark">S5</div>
+        <div class="brand-copy">
+          <div class="brand-line"><h1>Seedream Studio</h1><span class="pro-badge">PRO EDIT</span></div>
+          <p>Seedream v5.0 Pro · AtlasCloud API</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="balance-chip" id="balanceBtn" type="button" aria-label="刷新余额">
+          <span>余额</span><strong id="balanceValue">--</strong>
+        </button>
+        <button class="btn btn-outline" id="apiBtn" type="button">API 设置</button>
+      </div>
+    </header>
+
+    <nav class="tabs" aria-label="页面切换">
+      <button class="tab active" data-tab="editor" type="button">图片编辑</button>
+      <button class="tab" data-tab="history" type="button">生成记录 <span class="count" id="historyCount">0</span></button>
+      <button class="tab" data-tab="album" type="button">相册 <span class="count" id="albumCount">0</span></button>
+    </nav>
+
+    <main>
+      <section class="tab-panel active" id="panel-editor" data-panel="editor">
+        <div class="editor-grid">
+          <section class="card controls-card">
+            <div class="section-head">
+              <div><span class="eyebrow">INPUT</span><h2>准备原图</h2></div>
+              <span class="muted" id="sourceMeta">最大 30MB</span>
+            </div>
+
+            <label class="upload-zone" id="editorDropZone">
+              <input id="editorFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/tiff,image/heic,image/heif,.heic,.heif" hidden />
+              <div id="uploadEmpty" class="upload-empty">
+                <div class="upload-icon">＋</div>
+                <strong>拖入图片，或点击上传</strong>
+                <span>JPEG / PNG / WebP / HEIC 等</span>
+              </div>
+              <img id="sourcePreview" class="source-preview hidden" alt="原图预览" />
+              <div class="source-overlay hidden" id="sourceOverlay">点击更换原图</div>
+            </label>
+
+            <div class="field-block">
+              <div class="field-title"><label for="prompt">告诉它怎么改</label><span id="promptCount">0 字</span></div>
+              <textarea id="prompt" rows="7" placeholder="比如：把背景换成雨夜的东京街头，保留人物的脸、姿势和衣服……"></textarea>
+              <div class="quick-prompts">
+                <button type="button" data-prompt="提升画面清晰度、细节和质感，保持原始构图与人物身份不变。">画质增强</button>
+                <button type="button" data-prompt="在保持主体身份、姿势和构图基本不变的前提下进行风格化处理。">风格化</button>
+                <button type="button" data-prompt="移除背景并输出干净的透明 PNG，主体边缘自然完整。">去背景</button>
+              </div>
+            </div>
+
+            <details class="settings" open>
+              <summary>生成设置</summary>
+              <div class="setting-row">
+                <div><strong>智能人物保护</strong><span>有 DeepSeek Key 时自动判断人物与人脸</span></div>
+                <label class="switch"><input id="personProtect" type="checkbox" checked /><span></span></label>
+              </div>
+              <div class="analysis-status" id="analysisStatus">上传图片后自动判断</div>
+              <div class="setting-row">
+                <div><strong>深度思考</strong><span>开启自动提示词深度优化</span></div>
+                <select id="thinking"><option value="enabled">启用</option><option value="disabled">关闭</option></select>
+              </div>
+              <div class="setting-row">
+                <div><strong>提示词优化</strong><span>标准模式质量更高，快速模式更快</span></div>
+                <select id="optimization"><option value="standard">标准</option><option value="fast">快速</option></select>
+              </div>
+            </details>
+
+            <div class="field-block compact">
+              <div class="field-title"><span>输出比例</span><span id="ratioHint">上传后自动识别</span></div>
+              <div class="ratio-grid" id="ratioGrid"></div>
+            </div>
+
+            <div class="field-block compact">
+              <div class="field-title"><span>分辨率</span><span>Seedream v5.0 Pro</span></div>
+              <div class="resolution-grid">
+                <button class="resolution active" data-resolution="1K" type="button"><strong>1K</strong><span>约 1024</span></button>
+                <button class="resolution" data-resolution="1.5K" type="button"><strong>1.5K</strong><span>约 1536</span></button>
+                <button class="resolution" data-resolution="2K" type="button"><strong>2K</strong><span>约 2048</span></button>
+              </div>
+            </div>
+
+            <button class="btn btn-primary generate-btn" id="generateBtn" type="button">开始编辑</button>
+          </section>
+
+          <section class="card result-card">
+            <div class="result-head">
+              <div><span class="eyebrow">OUTPUT</span><h2>结果画布</h2><p id="resultSubtitle">等待上传原图</p></div>
+              <div class="result-actions">
+                <button class="btn btn-light hidden" id="addResultAlbumBtn" type="button">加入相册</button>
+                <button class="btn btn-light hidden" id="downloadResultBtn" type="button">保存图片</button>
+              </div>
+            </div>
+            <div class="canvas" id="resultCanvas">
+              <div class="canvas-placeholder" id="canvasPlaceholder">
+                <div class="placeholder-icon">◫</div>
+                <strong>这里会显示处理结果</strong>
+                <span>上传原图、写好修改要求，然后点击开始编辑。</span>
+              </div>
+              <img id="resultImage" class="result-image hidden zoomable" alt="Seedream 处理结果" />
+              <div class="processing hidden" id="processingBox">
+                <div class="spinner"></div><strong id="processingText">正在处理</strong>
+                <div class="progress"><i id="progressBar"></i></div>
+              </div>
+            </div>
+            <p class="storage-note">生成记录会保存在当前浏览器中，不再限制 12 条；只有你主动删除才会移除。</p>
+          </section>
+        </div>
+      </section>
+
+      <section class="tab-panel" id="panel-history" data-panel="history">
+        <div class="page-head">
+          <div><span class="eyebrow">HISTORY</span><h2>生成记录</h2><p>生成过的结果会一直保留在这台设备的浏览器里。</p></div>
+          <button class="btn btn-outline danger-outline" id="clearHistoryBtn" type="button">清空记录</button>
+        </div>
+        <div class="gallery-grid" id="historyGrid"></div>
+        <div class="empty-state hidden" id="historyEmpty"><strong>还没有生成记录</strong><span>完成一次图片编辑后会自动出现在这里。</span></div>
+      </section>
+
+      <section class="tab-panel" id="panel-album" data-panel="album">
+        <div class="page-head album-head">
+          <div><span class="eyebrow">ALBUM</span><h2>我的相册</h2><p>可以从本机自由上传，也可以把生成结果加入相册。拖住“≡”即可调整顺序。</p></div>
+          <div class="album-actions">
+            <label class="btn btn-primary upload-button">上传图片<input id="albumUpload" type="file" accept="image/*,.heic,.heif" multiple hidden /></label>
+            <button class="btn btn-outline" id="toggleArrangeBtn" type="button">整理顺序</button>
+          </div>
+        </div>
+        <div class="album-toolbar hidden" id="arrangeTip">整理模式已开启：拖住图片右上角的“≡”移动；手机也可以拖。也可用左右箭头微调。</div>
+        <div class="gallery-grid album-grid" id="albumGrid"></div>
+        <div class="empty-state hidden" id="albumEmpty"><strong>相册还是空的</strong><span>点“上传图片”，或者在生成记录里点“加入相册”。</span></div>
+        <div class="pagination hidden" id="albumPagination">
+          <button class="btn btn-light" id="prevPageBtn" type="button">上一页</button>
+          <span id="pageInfo">1 / 1</span>
+          <button class="btn btn-light" id="nextPageBtn" type="button">下一页</button>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog class="modal" id="apiModal">
+    <form method="dialog" class="modal-card" id="apiForm">
+      <div class="modal-head"><div><span class="eyebrow">API</span><h2>API 设置</h2></div><button class="icon-btn" value="cancel" aria-label="关闭">×</button></div>
+      <label>AtlasCloud API Key<input id="atlasKeyInput" type="password" autocomplete="off" placeholder="apikey-..." /></label>
+      <label>DeepSeek API Key <span class="optional">可选，用于人物分析</span><input id="deepseekKeyInput" type="password" autocomplete="off" placeholder="sk-..." /></label>
+      <details class="advanced-api">
+        <summary>高级设置</summary>
+        <label>兼容代理地址 <span class="optional">可留空</span><input id="proxyBaseInput" type="url" placeholder="例如 https://your-domain.com" /></label>
+        <p>留空时浏览器直接请求 AtlasCloud / DeepSeek；若部署环境限制跨域，可填写你自己的兼容代理。</p>
+      </details>
+      <p class="privacy-note">Key 只保存在当前浏览器，不写进网页源码。</p>
+      <div class="modal-actions"><button class="btn btn-light" id="clearKeysBtn" type="button">清除</button><button class="btn btn-primary" id="saveKeysBtn" type="button">保存</button></div>
+    </form>
+  </dialog>
+
+  <dialog class="lightbox" id="lightbox">
+    <button class="lightbox-close" id="lightboxClose" type="button" aria-label="关闭">×</button>
+    <div class="lightbox-stage" id="lightboxStage">
+      <img id="lightboxImage" alt="图片预览" />
+    </div>
+    <div class="lightbox-tip">双击 / 双击触控：放大或还原</div>
+  </dialog>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="./app.js"></script>
+</body>
+</html>
