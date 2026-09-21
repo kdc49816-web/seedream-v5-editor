@@ -21,10 +21,10 @@
 .stack-counter{font-size:12px;font-weight:800;color:#2f3136}.stack-hint{font-size:10px;color:var(--muted)}
 .stack-viewport{position:relative;height:560px;overflow:hidden;border-radius:22px;background:linear-gradient(180deg,#fafafb 0%,#f2f3f6 100%);border:1px solid #ececf0}
 .stack-deck{position:relative;width:100%;height:100%}
-.stack-card{position:absolute;left:50%;top:50%;width:min(82%,360px);height:min(74%,520px);transform:translate(-50%,-50%);transform-origin:center center;transition:transform .24s ease,opacity .24s ease;pointer-events:none}
+.stack-card{position:absolute;left:50%;top:50%;width:min(82%,360px);height:min(74%,520px);transform:translate3d(-50%,-50%,0);transform-origin:center center;transition:transform .32s cubic-bezier(.22,.8,.22,1),opacity .24s ease;pointer-events:none;will-change:transform,opacity;backface-visibility:hidden;-webkit-backface-visibility:hidden}
 .stack-card-shell{width:100%;height:100%;background:#fff;border:1px solid rgba(0,0,0,.06);border-radius:24px;overflow:hidden;box-shadow:0 18px 40px rgba(24,28,36,.16)}
-.stack-card.current{pointer-events:auto;z-index:5}.stack-card.current .stack-card-shell{touch-action:pan-y}
-.stack-card.depth-0{transform:translate(-50%,-50%) scale(1);opacity:1}.stack-card.depth-1{transform:translate(calc(-50% + 12px),calc(-50% + 18px)) scale(.965);opacity:.96}.stack-card.depth-2{transform:translate(calc(-50% + 24px),calc(-50% + 34px)) scale(.93);opacity:.92}.stack-card.depth-3{transform:translate(calc(-50% + 36px),calc(-50% + 50px)) scale(.895);opacity:.85}
+.stack-card.current{pointer-events:auto;z-index:5}.stack-card.current .stack-card-shell{touch-action:pan-y;will-change:transform;user-select:none;-webkit-user-select:none}
+.stack-card.depth-0{transform:translate3d(-50%,-50%,0) scale(1);opacity:1}.stack-card.depth-1{transform:translate3d(calc(-50% + 14px),calc(-50% + 18px),0) scale(.965);opacity:.96}.stack-card.depth-2{transform:translate3d(calc(-50% + 27px),calc(-50% + 34px),0) scale(.93);opacity:.91}.stack-card.depth-3{transform:translate3d(calc(-50% + 39px),calc(-50% + 49px),0) scale(.9);opacity:.78}
 .stack-image-wrap{position:relative;width:100%;height:100%;background:#f4f4f6}.stack-image{width:100%;height:100%;object-fit:cover;display:block;-webkit-user-drag:none;user-select:none}
 .stack-meta{position:absolute;left:12px;right:12px;bottom:12px;background:rgba(22,22,24,.54);backdrop-filter:blur(10px);color:#fff;border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:3px}.stack-meta strong{font-size:13px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.stack-meta span{font-size:10px;opacity:.92}
 .stack-nav{display:flex;justify-content:center;gap:10px;margin-top:12px}.stack-nav .btn{min-width:110px}.stack-swipe-hint{position:absolute;left:50%;bottom:18px;transform:translateX(-50%);font-size:10px;color:#747881;background:rgba(255,255,255,.82);padding:6px 10px;border-radius:999px;border:1px solid rgba(0,0,0,.05);white-space:nowrap}
@@ -172,7 +172,7 @@
         <div class="album-stack hidden" id="albumStackView">
           <div class="stack-topline">
             <span class="stack-counter" id="albumStackCounter">1 / 1</span>
-            <span class="stack-hint">左滑下一张，右滑上一张，双击放大</span>
+            <span class="stack-hint">右滑下一张，左滑上一张，循环浏览，双击放大</span>
           </div>
           <div class="stack-viewport">
             <div class="stack-deck" id="albumStackDeck"></div>
@@ -218,36 +218,210 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script src="../app.js"></script>
 
+
 <script>
 (()=>{
-  const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
-  let view='grid', items=[], index=0, urls=[];
+  const $=(s,r=document)=>r.querySelector(s), $=(s,r=document)=>[...r.querySelectorAll(s)];
+  let view='grid', items=[], index=0, urls=[], animating=false;
   const revoke=()=>{urls.forEach(u=>URL.revokeObjectURL(u));urls=[]};
-  function srcFor(x){if(x.blob){const u=URL.createObjectURL(x.blob);urls.push(u);return u}return x.url||x.dataUrl||''}
+  const mod=(n,m)=>((n%m)+m)%m;
+  function srcFor(x){if(x?.blob){const u=URL.createObjectURL(x.blob);urls.push(u);return u}return x?.url||x?.dataUrl||''}
   function esc(s=''){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
   async function getAlbum(){
-    return new Promise((resolve)=>{const q=indexedDB.open('seedream-studio-db',1);q.onerror=()=>resolve([]);q.onupgradeneeded=()=>{};q.onsuccess=()=>{try{const tx=q.result.transaction('album','readonly');const r=tx.objectStore('album').getAll();r.onsuccess=()=>resolve((r.result||[]).sort((a,b)=>(a.order??0)-(b.order??0)));r.onerror=()=>resolve([])}catch{resolve([])}}});
+    return new Promise((resolve)=>{
+      const q=indexedDB.open('seedream-studio-db',1);
+      q.onerror=()=>resolve([]);
+      q.onupgradeneeded=()=>{};
+      q.onsuccess=()=>{
+        try{
+          const tx=q.result.transaction('album','readonly');
+          const r=tx.objectStore('album').getAll();
+          r.onsuccess=()=>resolve((r.result||[]).sort((a,b)=>(a.order??0)-(b.order??0)));
+          r.onerror=()=>resolve([]);
+        }catch{resolve([])}
+      };
+    });
   }
-  function lightbox(src){const d=$('#lightbox'),im=$('#lightboxImage'); if(!d||!im)return; im.src=src;im.classList.add('zoomed');if(!d.open)d.showModal()}
-  function card(x,d){const s=srcFor(x);return `<article class="stack-card depth-${d} ${d===0?'current':''}"><div class="stack-card-shell"><div class="stack-image-wrap"><img class="stack-image" src="${esc(s)}" draggable="false"><div class="stack-meta"><strong>${esc(x.name||'相册图片')}</strong><span>第 ${index+d+1} 张</span></div></div></div></article>`}
+  function lightbox(src){
+    const d=$('#lightbox'),im=$('#lightboxImage');
+    if(!d||!im||!src)return;
+    im.src=src; im.classList.add('zoomed');
+    if(!d.open)d.showModal();
+  }
+  function card(x,d,absoluteIndex){
+    const s=srcFor(x);
+    return `<article class="stack-card depth-${d} ${d===0?'current':''}" data-depth="${d}">
+      <div class="stack-card-shell">
+        <div class="stack-image-wrap">
+          <img class="stack-image" src="${esc(s)}" draggable="false">
+          <div class="stack-meta"><strong>${esc(x.name||'相册图片')}</strong><span>第 ${absoluteIndex+1} 张</span></div>
+        </div>
+      </div>
+    </article>`;
+  }
+  function visibleItems(){
+    const count=Math.min(4,items.length);
+    return Array.from({length:count},(_,d)=>{
+      const absoluteIndex=mod(index+d,items.length);
+      return {item:items[absoluteIndex],depth:d,absoluteIndex};
+    });
+  }
   function draw(){
     revoke();
-    const deck=$('#albumStackDeck');if(!deck)return;
-    if(!items.length){deck.innerHTML='<div class="empty-state"><strong>相册还是空的</strong><span>先上传几张图片再切到卡片模式。</span></div>';$('#albumStackCounter').textContent='0 / 0';return}
-    index=Math.max(0,Math.min(index,items.length-1));const vis=items.slice(index,index+4);deck.innerHTML=vis.map((x,i)=>card(x,i)).join('')+'<div class="stack-swipe-hint">左右滑动切换 · 双击放大</div>';$('#albumStackCounter').textContent=`${index+1} / ${items.length}`;$('#stackPrevBtn').disabled=index<=0;$('#stackNextBtn').disabled=index>=items.length-1;bindSwipe();
+    const deck=$('#albumStackDeck');
+    if(!deck)return;
+    if(!items.length){
+      deck.innerHTML='<div class="empty-state"><strong>相册还是空的</strong><span>先上传几张图片再切到卡片模式。</span></div>';
+      $('#albumStackCounter').textContent='0 / 0';
+      return;
+    }
+    index=mod(index,items.length);
+    deck.innerHTML=visibleItems().map(v=>card(v.item,v.depth,v.absoluteIndex)).join('')+
+      '<div class="stack-swipe-hint">左右滑动循环切换 · 双击放大</div>';
+    $('#albumStackCounter').textContent=`${index+1} / ${items.length}`;
+    // 循环模式下两边始终可用（只有一张图时禁用）
+    $('#stackPrevBtn').disabled=items.length<=1;
+    $('#stackNextBtn').disabled=items.length<=1;
+    bindSwipe();
   }
-  async function refresh(){items=await getAlbum();draw()}
-  function setView(v){view=v;$$('#albumViewSwitch [data-album-view]').forEach(b=>b.classList.toggle('active',b.dataset.albumView===v));$('#albumGrid').classList.toggle('hidden',v==='stack');$('#albumPagination').classList.toggle('hidden',v==='stack');$('#albumStackView').classList.toggle('hidden',v!=='stack');$('#toggleArrangeBtn').disabled=v==='stack';if(v==='stack')refresh()}
-  function step(d){const n=Math.max(0,Math.min(index+d,items.length-1));if(n!==index){index=n;draw()}}
-  function bindSwipe(){const c=$('.stack-card.current');if(!c)return;const shell=$('.stack-card-shell',c),it=items[index];let sx=0,sy=0,dx=0,dy=0,on=false,last=0;
-    shell.onpointerdown=e=>{on=true;sx=e.clientX;sy=e.clientY;dx=dy=0;shell.setPointerCapture?.(e.pointerId)};
-    shell.onpointermove=e=>{if(!on)return;dx=e.clientX-sx;dy=e.clientY-sy;if(Math.abs(dx)>Math.abs(dy)){e.preventDefault();c.style.transition='none';c.style.transform=`translate(calc(-50% + ${dx}px), calc(-50% + ${Math.max(-16,Math.min(16,dy*.08))}px)) rotate(${dx/18}deg)`}};
-    const reset=()=>{on=false;c.style.transition='transform .2s ease';c.style.transform='';setTimeout(()=>c.style.transition='',210)};
-    shell.onpointerup=e=>{if(!on)return;on=false;if(Math.abs(dx)>70&&Math.abs(dx)>Math.abs(dy)){dx<0?step(1):step(-1)}else reset();const now=Date.now();if(e.pointerType!=='mouse'&&now-last<330&&it){lightbox(srcFor(it));last=0}else last=now};shell.onpointercancel=reset;shell.ondblclick=e=>{e.preventDefault();if(it)lightbox(srcFor(it))};
+  async function refresh(){
+    const oldId=items[index]?.id;
+    items=await getAlbum();
+    if(oldId){
+      const same=items.findIndex(x=>x.id===oldId);
+      if(same>=0)index=same;
+    }
+    if(items.length)index=mod(index,items.length);else index=0;
+    draw();
+  }
+  function setView(v){
+    view=v;
+    $('#albumViewSwitch [data-album-view]').forEach(b=>b.classList.toggle('active',b.dataset.albumView===v));
+    $('#albumGrid').classList.toggle('hidden',v==='stack');
+    $('#albumPagination').classList.toggle('hidden',v==='stack');
+    $('#albumStackView').classList.toggle('hidden',v!=='stack');
+    $('#toggleArrangeBtn').disabled=v==='stack';
+    if(v==='stack')refresh();
+  }
+  function setBackCardProgress(progress){
+    const p=Math.max(0,Math.min(1,progress));
+    const b1=$('.stack-card.depth-1');
+    const b2=$('.stack-card.depth-2');
+    const b3=$('.stack-card.depth-3');
+    if(b1){
+      const x=14*(1-p), y=18*(1-p), s=.965+(.035*p);
+      b1.style.transition='none';
+      b1.style.transform=`translate3d(calc(-50% + ${x}px),calc(-50% + ${y}px),0) scale(${s})`;
+    }
+    if(b2){
+      const x=27-(13*p), y=34-(16*p), s=.93+(.035*p);
+      b2.style.transition='none';
+      b2.style.transform=`translate3d(calc(-50% + ${x}px),calc(-50% + ${y}px),0) scale(${s})`;
+    }
+    if(b3){
+      const x=39-(12*p), y=49-(15*p), s=.9+(.03*p);
+      b3.style.transition='none';
+      b3.style.transform=`translate3d(calc(-50% + ${x}px),calc(-50% + ${y}px),0) scale(${s})`;
+    }
+  }
+  function clearInlineTransitions(){
+    $('.stack-card').forEach(el=>{
+      el.style.transition='';
+      el.style.transform='';
+      el.style.opacity='';
+    });
+  }
+  function commitStep(delta){
+    if(!items.length)return;
+    index=mod(index+delta,items.length);
+    animating=false;
+    draw();
+  }
+  function animateAway(delta,dragX=0){
+    if(animating||items.length<=1)return;
+    animating=true;
+    const c=$('.stack-card.current');
+    if(!c){commitStep(delta);return}
+    const viewport=$('.stack-viewport');
+    const w=viewport?.clientWidth||window.innerWidth;
+    const dir=delta>0?1:-1; // 右滑 -> 下一张；左滑 -> 上一张
+    const targetX=dir*(w+180);
+    const rot=dir*13;
+    c.style.transition='transform .30s cubic-bezier(.18,.82,.23,1), opacity .24s ease';
+    c.style.transform=`translate3d(calc(-50% + ${targetX}px),-50%,0) rotate(${rot}deg)`;
+    c.style.opacity='0';
+    // 后排卡片同步顶上来，减少“重新渲染跳一下”的感觉
+    const b1=$('.stack-card.depth-1'), b2=$('.stack-card.depth-2'), b3=$('.stack-card.depth-3');
+    [b1,b2,b3].forEach(x=>{if(x)x.style.transition='transform .30s cubic-bezier(.18,.82,.23,1),opacity .25s ease'});
+    if(b1){b1.style.transform='translate3d(-50%,-50%,0) scale(1)';b1.style.opacity='1'}
+    if(b2){b2.style.transform='translate3d(calc(-50% + 14px),calc(-50% + 18px),0) scale(.965)';b2.style.opacity='.96'}
+    if(b3){b3.style.transform='translate3d(calc(-50% + 27px),calc(-50% + 34px),0) scale(.93)';b3.style.opacity='.91'}
+    setTimeout(()=>commitStep(delta),285);
+  }
+  function step(delta){
+    if(items.length<=1||animating)return;
+    animateAway(delta);
+  }
+  function bindSwipe(){
+    const c=$('.stack-card.current');
+    if(!c)return;
+    const shell=$('.stack-card-shell',c), it=items[index];
+    let sx=0,sy=0,dx=0,dy=0,on=false,moved=false,lastTap=0,startTime=0;
+    shell.onpointerdown=e=>{
+      if(animating)return;
+      on=true;moved=false;sx=e.clientX;sy=e.clientY;dx=dy=0;startTime=performance.now();
+      shell.setPointerCapture?.(e.pointerId);
+      c.style.transition='none';
+    };
+    shell.onpointermove=e=>{
+      if(!on||animating)return;
+      dx=e.clientX-sx;dy=e.clientY-sy;
+      if(Math.abs(dx)>6)moved=true;
+      if(Math.abs(dx)>Math.abs(dy)){
+        e.preventDefault();
+        const limitedY=Math.max(-16,Math.min(16,dy*.08));
+        c.style.transform=`translate3d(calc(-50% + ${dx}px),calc(-50% + ${limitedY}px),0) rotate(${dx/28}deg)`;
+        c.style.opacity=String(Math.max(.58,1-Math.abs(dx)/520));
+        setBackCardProgress(Math.min(1,Math.abs(dx)/125));
+      }
+    };
+    const springBack=()=>{
+      on=false;
+      c.style.transition='transform .34s cubic-bezier(.22,1,.36,1),opacity .22s ease';
+      c.style.transform='translate3d(-50%,-50%,0) scale(1)';
+      c.style.opacity='1';
+      $('.stack-card:not(.current)').forEach(el=>{el.style.transition='transform .34s cubic-bezier(.22,1,.36,1),opacity .22s ease';el.style.transform='';el.style.opacity=''});
+      setTimeout(clearInlineTransitions,350);
+    };
+    shell.onpointerup=e=>{
+      if(!on||animating)return;
+      on=false;
+      const elapsed=Math.max(1,performance.now()-startTime);
+      const velocity=Math.abs(dx)/elapsed;
+      const qualifies=(Math.abs(dx)>72 || (Math.abs(dx)>38&&velocity>.42)) && Math.abs(dx)>Math.abs(dy);
+      if(qualifies){
+        // 按你的手势：右滑下一张，左滑上一张；到边界自动循环。
+        animateAway(dx>0?1:-1,dx);
+        return;
+      }
+      springBack();
+      if(!moved){
+        const now=Date.now();
+        if(e.pointerType!=='mouse'&&now-lastTap<330&&it){
+          lightbox(srcFor(it));lastTap=0;
+        }else lastTap=now;
+      }
+    };
+    shell.onpointercancel=()=>{if(on)springBack()};
+    shell.ondblclick=e=>{e.preventDefault();if(it)lightbox(srcFor(it))};
   }
   document.addEventListener('DOMContentLoaded',()=>{
-    $('#albumViewSwitch')?.addEventListener('click',e=>{const b=e.target.closest('[data-album-view]');if(b)setView(b.dataset.albumView)});
-    $('#stackPrevBtn')?.addEventListener('click',()=>step(-1));$('#stackNextBtn')?.addEventListener('click',()=>step(1));
+    $('#albumViewSwitch')?.addEventListener('click',e=>{
+      const b=e.target.closest('[data-album-view]');
+      if(b)setView(b.dataset.albumView);
+    });
+    $('#stackPrevBtn')?.addEventListener('click',()=>step(-1));
+    $('#stackNextBtn')?.addEventListener('click',()=>step(1));
     $('#albumUpload')?.addEventListener('change',()=>setTimeout(()=>{if(view==='stack')refresh()},350));
     setView('grid');
   });
