@@ -1,6 +1,6 @@
 (()=>{
 'use strict';
-window.__albumCardVersion='v16-large-fluid-deck';
+window.__albumCardVersion='v17-real-photo-stack';
 
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const DB='seedream-studio-db',VER=1,mod=(n,m)=>((n%m)+m)%m;
@@ -9,6 +9,7 @@ const clamp=(n,a,b)=>Math.max(a,Math.min(b,n)),lerp=(a,b,p)=>a+(b-a)*p;
 let view='grid',items=[],index=0,slots=null;
 let active=false,animating=false,sx=0,sy=0,dx=0,dy=0,started=0,raf=0,pending=null,lastTap=0;
 let editingReviewId='';
+let cards=[],moving=[],refreshToken=0;
 let deckWidth=400,cardWidth=320,pointerId=null,settleCancel=null,velocity=0,lastX=0,lastTime=0;
 const originalUrls=new Map(),previewUrls=new Map(),previewJobs=new Map();
 const roles=['role-current','role-prev','role-prev2','role-next1','role-next2','role-next3','role-spare','current'];
@@ -20,7 +21,7 @@ function warmFarPreview(){
   warmTimer=setTimeout(()=>{
     if(view!=='stack'||!items.length)return;
     if(active||animating){warmFarPreview();return}
-    [5,-3].forEach(o=>previewFor(items[idx(o)]).catch(()=>{}));
+    prepareNearby();
   },180);
 }
 
@@ -118,18 +119,26 @@ async function assign(el,item,n){
   $('.stack-meta span',el).textContent='第 '+(n+1)+' 张';
 }
 function resetRoles(){
-  setRole(slots.current,'role-current');setRole(slots.prev,'role-prev');setRole(slots.prev2,'role-prev2');
-  setRole(slots.next1,'role-next1');setRole(slots.next2,'role-next2');setRole(slots.next3,'role-next3');setRole(slots.spare,'role-spare');
+  cards.forEach((el,n)=>{
+    const depth=mod(n-index,items.length);
+    el.className='stack-card'+(depth===0?' role-current current':'');
+    el.style.transition='none';el.style.transform=restTransform(depth);el.style.opacity='1';
+    el.style.zIndex=String(items.length-depth);el.style.willChange=depth<4?'transform':'auto';
+    el.style.pointerEvents=depth===0?'auto':'none';el.dataset.depth=String(depth);
+    $('.stack-image',el).style.filter='none';
+  });
+  slots.current=cards[index];slots.prev=cards[idx(-1)];slots.next1=cards[idx(1)];moving=[];
 }
 async function initialFill(){
-  const jobs=[
-    assign(slots.prev2,items[idx(-2)],idx(-2)),assign(slots.prev,items[idx(-1)],idx(-1)),assign(slots.current,items[idx(0)],idx(0)),
-    assign(slots.next1,items[idx(1)],idx(1)),assign(slots.next2,items[idx(2)],idx(2)),assign(slots.next3,items[idx(3)],idx(3)),assign(slots.spare,items[idx(4)],idx(4))
-  ];
-  await Promise.all(jobs);
+  await prepareNearby();
+}
+function prepareNearby(){
+  if(!items.length)return Promise.resolve();
+  const indices=new Set([idx(-1),idx(-2),...Array.from({length:Math.min(6,items.length)},(_,i)=>idx(i))]);
+  return Promise.all([...indices].map(n=>assign(cards[n],items[n],n)));
 }
 function updateCount(){
-  $('#albumStackCounter').textContent=(index+1)+' / '+items.length;
+  $('#albumStackCounter').textContent=(items.length?index+1:0)+' / '+items.length;
   $('#stackPrevBtn').disabled=items.length<=1;$('#stackNextBtn').disabled=items.length<=1;
   updateReviewEntry();
 }
@@ -153,7 +162,7 @@ async function persistReview(value){
   if(review)item.review=review;else delete item.review;
   await writeAlbum(item);
   document.dispatchEvent(new CustomEvent('album-review-changed',{detail:{id:key(item),review}}));
-  if(slots)Object.values(slots).forEach(el=>{if(el?._itemId===key(item)){const caption=$('.stack-caption',el);if(caption){caption.textContent=review;caption.classList.toggle('hidden',!review)}}});
+  cards.forEach(el=>{if(el._itemId===key(item)){const caption=$('.stack-caption',el);caption.textContent=review;caption.classList.toggle('hidden',!review)}});
   updateReviewEntry();
 }
 async function saveReview(){
@@ -170,10 +179,10 @@ function notify(text){
 function makePool(){
   const deck=$('#albumStackDeck');deck.replaceChildren();
   const loading=document.createElement('div');loading.className='stack-loading';loading.textContent='正在准备卡片…';deck.append(loading);
-  const prev2=createCard(),prev=createCard(),current=createCard(),next1=createCard(),next2=createCard(),next3=createCard(),spare=createCard();
+  cards=items.map(item=>{const el=createCard();el._itemId=key(item);el.dataset.photoId=key(item);return el});
   const hint=document.createElement('div');hint.className='stack-swipe-hint';hint.textContent='左右滑动切换 · 后面的卡片会直接顶上来';
-  deck.append(prev2,prev,current,next1,next2,next3,spare,hint);
-  slots={deck,prev2,prev,current,next1,next2,next3,spare,loading};
+  deck.append(...cards,hint);
+  slots={deck,loading};
   resetRoles();
   measureDeck();
   deck.addEventListener('pointerdown',onDown,{passive:true});deck.addEventListener('pointermove',onMove,{passive:false});
@@ -181,12 +190,15 @@ function makePool(){
   deck.addEventListener('dblclick',e=>{if(e.target.closest('.role-current .stack-card-shell')){e.preventDefault();openCurrent()}});
 }
 async function refresh(){
-  const old=items[index]?.id;items=await readAlbum();cleanup();
+  const token=++refreshToken,old=items[index]?.id,loaded=await readAlbum();if(token!==refreshToken)return;
+  if(settleCancel){settleCancel();settleCancel=null}if(raf)cancelAnimationFrame(raf);
+  raf=0;active=animating=false;pointerId=null;pending=null;items=loaded;cleanup();
   if(old){const p=items.findIndex(x=>x.id===old);if(p>=0)index=p}
   if(!items.length){
+    cards=[];slots=null;index=0;
     $('#albumStackDeck').innerHTML='<div class="empty-state"><strong>相册还是空的</strong><span>先上传图片，再切到卡片模式。</span></div>';updateCount();return;
   }
-  index=mod(index,items.length);makePool();await initialFill();slots.loading.remove();slots.loading=null;updateCount();
+  index=mod(index,items.length);makePool();await initialFill();if(token!==refreshToken)return;slots.loading.remove();slots.loading=null;updateCount();
   // 后续远端预览提前做，不触碰任何可见卡片
   warmFarPreview();
 }
@@ -206,26 +218,38 @@ function vw(){return deckWidth}
 function tf(x,y,s=1,r=0){return 'translate3d(calc(-50% + '+x+'px),calc(-50% + '+y+'px),0) scale('+s+') rotate('+r+'deg)'}
 function prevBase(){return -(vw()*.90)}
 function out(dir){return dir*vw()*1.10}
+function depthPose(depth){
+  // Each real card has its own depth. Compress deep stacks into the available margin.
+  const d=Math.max(0,depth),offset=26*(1-Math.exp(-d/3));
+  return {x:offset*.65,y:offset,s:1-.055*(1-Math.exp(-d/3))};
+}
+function restTransform(depth){const p=depthPose(depth);return tf(p.x,p.y,p.s)}
+function beginMotion(){
+  moving=[...new Set([slots.current,slots.prev,...Array.from({length:Math.min(6,items.length)},(_,i)=>cards[idx(i)])])];
+  moving.forEach(el=>{el.style.transition='none';el.style.willChange='transform';$('.stack-image',el).style.transition='filter 140ms ease-out'});
+}
+function paintMotion(x,p,blur=0){
+  const forward=x<=0,previous=slots.prev;
+  moving.forEach(el=>{
+    const depth=Number(el.dataset.depth);
+    el.style.zIndex=String(items.length-depth);
+    if(el===slots.current){
+      el.style.transform=tf(x,0,1,reducedMotion.matches?0:clamp(x/cardWidth*1.1,-.8,.8));
+    }else if(!forward&&el===previous){
+      // Move the actual last card to the front; no duplicate image is inserted.
+      el.style.zIndex=String(items.length+1);el.style.transform=tf(lerp(prevBase(),0,p),0,lerp(.985,1,p));
+    }else{
+      const a=depthPose(depth),b=depthPose(forward?depth-1:depth+1);
+      el.style.transform=tf(lerp(a.x,b.x,p),lerp(a.y,b.y,p),lerp(a.s,b.s,p));
+    }
+    if(el===slots.current||el===previous)$('.stack-image',el).style.filter=blur?'blur('+blur+'px)':'none';
+  });
+}
 
 function frame(){
   raf=0;if(!pending||!active||animating||!slots)return;
   const x=pending.x,p=clamp(Math.abs(x)/(cardWidth*.72),0,1);
-  const lift=reducedMotion.matches?0:Math.sin(p*Math.PI)*3;
-  const tilt=reducedMotion.matches?0:clamp(x/cardWidth*3,-1.8,1.8);
-  slots.current.style.transform=tf(x,-lift,1+lift*.002,tilt);
-  if(x<0){
-    // 后面的 next1 就是之后的 current，不换图。
-    slots.next1.style.transform=tf(lerp(10,0,p),lerp(12,0,p),lerp(.975,1,p));
-    slots.next2.style.transform=tf(lerp(20,10,p),lerp(24,12,p),lerp(.95,.975,p));
-    slots.next2.style.opacity='1';
-    slots.next3.style.transform=tf(lerp(30,20,p),lerp(36,24,p),lerp(.925,.95,p));slots.next3.style.opacity=String(p);
-    slots.prev.style.transform=tf(prevBase(),0,.975);
-  }else if(x>0){
-    slots.prev.style.transform=tf(lerp(prevBase(),0,p),0,lerp(.975,1,p));
-    slots.next1.style.transform=tf(lerp(10,20,p),lerp(12,24,p),lerp(.975,.95,p));
-    slots.next2.style.transform=tf(lerp(20,30,p),lerp(24,36,p),lerp(.95,.925,p));slots.next2.style.opacity=String(1-p);
-    slots.next3.style.opacity='0';
-  }
+  paintMotion(x,p,reducedMotion.matches||Math.abs(x)<6?0:.55);
 }
 function onDown(e){
   if(view!=='stack'||animating||items.length<=1||!slots?.current?._ready||!e.target.closest('.role-current .stack-card-shell'))return;
@@ -233,6 +257,7 @@ function onDown(e){
   if(pointerId!==null)return;
   if(settleCancel){settleCancel();settleCancel=null;clearInline()}
   measureDeck();pointerId=e.pointerId;slots.deck.setPointerCapture?.(e.pointerId);
+  beginMotion();
   active=true;dx=dy=velocity=0;sx=lastX=e.clientX;sy=e.clientY;started=lastTime=performance.now();
 }
 function onMove(e){
@@ -244,10 +269,10 @@ function onMove(e){
 }
 function trans(ms=220){
   if(reducedMotion.matches)ms=1;
-  [slots.current,slots.prev,slots.next1,slots.next2,slots.next3].forEach(el=>el.style.transition='transform '+ms+'ms cubic-bezier(.18,.72,.24,1), opacity '+ms+'ms linear');
+  moving.forEach(el=>el.style.transition='transform '+ms+'ms cubic-bezier(.22,.65,.3,1)');
 }
 function clearInline(){
-  [slots.current,slots.prev,slots.prev2,slots.next1,slots.next2,slots.next3,slots.spare].forEach(el=>{el.style.transition='';el.style.transform='';el.style.opacity=''});
+  resetRoles();
 }
 function wait(el,cb,ms=220){
   let done=false,timer;const cancel=()=>{done=true;clearTimeout(timer);el.removeEventListener('transitionend',end)};
@@ -255,53 +280,29 @@ function wait(el,cb,ms=220){
   el.addEventListener('transitionend',end);timer=setTimeout(end,ms+60);return cancel;
 }
 function spring(){
-  trans(180);
-  if(!reducedMotion.matches)slots.current.style.transition='transform 220ms cubic-bezier(.2,.85,.3,1.12)';
-    slots.current.style.transform=tf(0,0,1);slots.prev.style.transform=tf(prevBase(),0,.975);slots.next1.style.transform=tf(10,12,.975);slots.next2.style.transform=tf(20,24,.95);
-    slots.next2.style.opacity='1';slots.next3.style.transform=tf(30,36,.925);slots.next3.style.opacity='0';
-  settleCancel=wait(slots.current,()=>{clearInline();settleCancel=null},220);
-}
-async function loadFarForward(el){
-  el.style.opacity='0';setRole(el,'role-spare');
-  await assign(el,items[idx(5)],idx(5));
-}
-async function loadFarBackward(el){
-  el.style.opacity='0';setRole(el,'role-prev2');
-  await assign(el,items[idx(-2)],idx(-2));
+  trans(210);
+  moving.forEach(el=>{el.style.transform=restTransform(Number(el.dataset.depth));$('.stack-image',el).style.filter='none'});
+  settleCancel=wait(slots.current,()=>{clearInline();settleCancel=null},210);
 }
 function finishNext(){
   index=idx(1);
-  const oldPrev2=slots.prev2,oldPrev=slots.prev,oldCurrent=slots.current;
-  slots.prev2=oldPrev;slots.prev=oldCurrent;slots.current=slots.next1;slots.next1=slots.next2;slots.next2=slots.next3;slots.next3=slots.spare;slots.spare=oldPrev2;
-  resetRoles();clearInline();updateCount();animating=false;
-  // 只有最远、完全不可见的 spare 才换新图
-  assign(slots.spare,items[idx(4)],idx(4)).then(warmFarPreview);
+  resetRoles();updateCount();animating=false;prepareNearby().then(warmFarPreview);
 }
 function next(){
   if(animating)return;if(!slots.next1._ready){spring();return}animating=true;active=false;
   const ms=clamp(240-Math.abs(dx)/cardWidth*85-Math.abs(velocity)*35,130,240);trans(ms);
-    slots.current.style.transform=tf(out(-1),0,1,reducedMotion.matches?0:-2);
-    slots.next1.style.transform=tf(0,0,1);
-    slots.next2.style.transform=tf(10,12,.975);slots.next2.style.opacity='1';
-    slots.next3.style.transform=tf(20,24,.95);slots.next3.style.opacity='1';
-  wait(slots.current,finishNext,ms);
+  paintMotion(out(-1),1,0);
+  settleCancel=wait(slots.current,()=>{settleCancel=null;finishNext()},ms);
 }
 function finishPrev(){
   index=idx(-1);
-  const oldPrev2=slots.prev2,oldPrev=slots.prev,oldCurrent=slots.current,oldNext1=slots.next1,oldNext2=slots.next2,oldNext3=slots.next3,oldSpare=slots.spare;
-  slots.spare=oldNext3;slots.next3=oldNext2;slots.next2=oldNext1;slots.next1=oldCurrent;slots.current=oldPrev;slots.prev=oldPrev2;slots.prev2=oldSpare;
-  resetRoles();clearInline();updateCount();animating=false;
-  // 只有最远、完全不可见的 prev2 才换新图
-  assign(slots.prev2,items[idx(-2)],idx(-2)).then(warmFarPreview);
+  resetRoles();updateCount();animating=false;prepareNearby().then(warmFarPreview);
 }
 function prev(){
   if(animating)return;if(!slots.prev._ready){spring();return}animating=true;active=false;
   const ms=clamp(240-Math.abs(dx)/cardWidth*85-Math.abs(velocity)*35,130,240);trans(ms);
-    slots.current.style.transform=tf(10,12,.975);
-    slots.prev.style.transform=tf(0,0,1);
-    slots.next1.style.transform=tf(20,24,.95);
-    slots.next2.style.transform=tf(30,36,.925);slots.next2.style.opacity='0';
-  wait(slots.prev,finishPrev,ms);
+  paintMotion(1,1,0);slots.current.style.transform=restTransform(1);
+  settleCancel=wait(slots.prev,()=>{settleCancel=null;finishPrev()},ms);
 }
 function onUp(e){
   if(e.pointerId!==pointerId)return;pointerId=null;
@@ -318,7 +319,7 @@ function openCurrent(){
   const u=originalSrc(items[index]),dlg=$('#lightbox'),img=$('#lightboxImage');if(!u||!dlg||!img)return;
   img.src=u;img.classList.remove('zoomed');if(!dlg.open)dlg.showModal();
 }
-function program(delta){if(animating||active||!slots||items.length<=1)return;if(settleCancel){settleCancel();settleCancel=null;clearInline()}measureDeck();dx=delta<0?1:-1;dy=velocity=0;if(delta<0)prev();else next()}
+function program(delta){if(animating||active||!slots||items.length<=1)return;if(settleCancel){settleCancel();settleCancel=null;clearInline()}measureDeck();beginMotion();dx=delta<0?1:-1;dy=velocity=0;if(delta<0)prev();else next()}
 
 document.addEventListener('DOMContentLoaded',()=>{
   $('#albumViewSwitch')?.addEventListener('click',e=>{const b=e.target.closest('[data-album-view]');if(b){e.preventDefault();e.stopPropagation();setView(b.dataset.albumView)}});

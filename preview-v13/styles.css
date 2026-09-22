@@ -90,3 +90,10 @@
   .review-entry{right:7px;top:36px}
 }
 @media(prefers-reduced-motion:reduce){.review-entry,.stack-nav .btn{transition:none}}
+
+/* One physical card per photo. DOM order/depth is managed by the album. */
+.stack-swipe-hint{z-index:2147483646}
+.stack-loading{z-index:2147483645;background:#f4f5f7}
+.stack-image{transition:filter 140ms ease-out}
+.stack-card .stack-caption{z-index:3}
+@media(prefers-reduced-motion:reduce){.stack-image{transition:none!important;filter:none!important}}
