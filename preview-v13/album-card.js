@@ -1,6 +1,6 @@
 (()=>{
 'use strict';
-window.__albumCardVersion='v20-subtle-blur';
+window.__albumCardVersion='v21-no-blur';
 
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const DB='seedream-studio-db',VER=1,mod=(n,m)=>((n%m)+m)%m;
@@ -90,7 +90,7 @@ function writeAlbum(item){
 function createCard(){
   const el=document.createElement('article');el.className='stack-card';
   el.innerHTML='<div class="stack-card-shell"><div class="stack-image-wrap"><img class="stack-image" draggable="false" alt=""><div class="stack-caption" aria-live="polite"></div><div class="stack-meta"><strong></strong><span></span></div></div></div>';
-  el._ready=false;el._itemId='';el._image=$('.stack-image',el);el._blur=0;return el;
+  el._ready=false;el._itemId='';el._image=$('.stack-image',el);return el;
 }
 function idx(o){return mod(index+o,items.length)}
 function setRole(el,name){
@@ -125,7 +125,6 @@ function resetRoles(){
     el.style.transition='none';el.style.transform=restTransform(depth);el.style.opacity='1';
     el.style.zIndex=String(items.length-depth);el.style.willChange=depth<4?'transform':'auto';
     el.style.pointerEvents=depth===0?'auto':'none';el.dataset.depth=String(depth);el._depth=depth;
-    setBlur(el,0);
   });
   slots.current=cards[index];slots.prev=cards[idx(-1)];slots.next1=cards[idx(1)];moving=[];
 }
@@ -226,10 +225,6 @@ function depthPose(depth){
   return poses[depth]={x:offset*.65,y:offset,s:1-.055*offset/26};
 }
 function restTransform(depth){const p=depthPose(depth);return tf(p.x,p.y,p.s)}
-function setBlur(el,amount){
-  if(el._blur===amount)return;
-  el._blur=amount;el._image.style.filter=amount?'blur('+amount+'px)':'none';
-}
 let motionForward=null;
 function beginMotion(){
   motionForward=null;
@@ -238,7 +233,7 @@ function beginMotion(){
     el._from=depthPose(el._depth);el._next=depthPose(el._depth-1);el._prev=depthPose(el._depth+1);
   });
 }
-function paintMotion(x,p,blur=0){
+function paintMotion(x,p){
   const forward=x<=0,previous=slots.prev;
   if(motionForward!==forward){
     moving.forEach(el=>{el.style.zIndex=String(!forward&&el===previous?items.length+1:items.length-el._depth)});
@@ -254,14 +249,13 @@ function paintMotion(x,p,blur=0){
       const a=el._from,b=forward?el._next:el._prev;
       el.style.transform=tf(lerp(a.x,b.x,p),lerp(a.y,b.y,p),lerp(a.s,b.s,p));
     }
-    if(el===slots.current||el===previous)setBlur(el,blur);
   });
 }
 
 function frame(){
   raf=0;if(!pending||!active||animating||!slots)return;
   const x=pending.x,p=clamp(Math.abs(x)/(cardWidth*.72),0,1);
-  paintMotion(x,p,reducedMotion.matches||Math.abs(x)<6?0:.15);
+  paintMotion(x,p);
 }
 function onDown(e){
   if(view!=='stack'||animating||items.length<=1||!slots?.current?._ready||!e.target.closest('.role-current .stack-card-shell'))return;
@@ -303,7 +297,7 @@ function finishNext(){
 function next(){
   if(animating)return;if(!slots.next1._ready){spring();return}animating=true;active=false;
   const ms=reducedMotion.matches?1:clamp(440-Math.abs(dx)/cardWidth*65-Math.abs(velocity)*12,340,440);trans(ms);
-  paintMotion(out(-1),1,slots.current._blur);
+  paintMotion(out(-1),1);
   settleCancel=wait(slots.current,()=>{settleCancel=null;finishNext()},ms);
 }
 function finishPrev(){
@@ -313,7 +307,7 @@ function finishPrev(){
 function prev(){
   if(animating)return;if(!slots.prev._ready){spring();return}animating=true;active=false;
   const ms=reducedMotion.matches?1:clamp(440-Math.abs(dx)/cardWidth*65-Math.abs(velocity)*12,340,440);trans(ms);
-  paintMotion(1,1,slots.current._blur);slots.current.style.transform=restTransform(1);
+  paintMotion(1,1);slots.current.style.transform=restTransform(1);
   settleCancel=wait(slots.prev,()=>{settleCancel=null;finishPrev()},ms);
 }
 function onUp(e){
