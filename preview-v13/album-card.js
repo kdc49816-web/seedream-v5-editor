@@ -1,6 +1,6 @@
 (()=>{
 'use strict';
-window.__albumCardVersion='v19-smooth-settle';
+window.__albumCardVersion='v20-subtle-blur';
 
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const DB='seedream-studio-db',VER=1,mod=(n,m)=>((n%m)+m)%m;
@@ -261,7 +261,7 @@ function paintMotion(x,p,blur=0){
 function frame(){
   raf=0;if(!pending||!active||animating||!slots)return;
   const x=pending.x,p=clamp(Math.abs(x)/(cardWidth*.72),0,1);
-  paintMotion(x,p,reducedMotion.matches||Math.abs(x)<6?0:.4);
+  paintMotion(x,p,reducedMotion.matches||Math.abs(x)<6?0:.15);
 }
 function onDown(e){
   if(view!=='stack'||animating||items.length<=1||!slots?.current?._ready||!e.target.closest('.role-current .stack-card-shell'))return;
