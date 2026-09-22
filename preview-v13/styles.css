@@ -97,3 +97,6 @@
 .stack-image{transition:filter 140ms ease-out}
 .stack-card .stack-caption{z-index:3}
 @media(prefers-reduced-motion:reduce){.stack-image{transition:none!important;filter:none!important}}
+
+/* The bottom stays anchored while the top follows the swipe. */
+.stack-card{transform-origin:50% 92%}

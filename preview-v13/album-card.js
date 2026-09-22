@@ -1,6 +1,6 @@
 (()=>{
 'use strict';
-window.__albumCardVersion='v17-real-photo-stack';
+window.__albumCardVersion='v18-bottom-pivot';
 
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const DB='seedream-studio-db',VER=1,mod=(n,m)=>((n%m)+m)%m;
@@ -90,7 +90,7 @@ function writeAlbum(item){
 function createCard(){
   const el=document.createElement('article');el.className='stack-card';
   el.innerHTML='<div class="stack-card-shell"><div class="stack-image-wrap"><img class="stack-image" draggable="false" alt=""><div class="stack-caption" aria-live="polite"></div><div class="stack-meta"><strong></strong><span></span></div></div></div>';
-  el._ready=false;el._itemId='';return el;
+  el._ready=false;el._itemId='';el._image=$('.stack-image',el);el._blur=0;return el;
 }
 function idx(o){return mod(index+o,items.length)}
 function setRole(el,name){
@@ -124,8 +124,8 @@ function resetRoles(){
     el.className='stack-card'+(depth===0?' role-current current':'');
     el.style.transition='none';el.style.transform=restTransform(depth);el.style.opacity='1';
     el.style.zIndex=String(items.length-depth);el.style.willChange=depth<4?'transform':'auto';
-    el.style.pointerEvents=depth===0?'auto':'none';el.dataset.depth=String(depth);
-    $('.stack-image',el).style.filter='none';
+    el.style.pointerEvents=depth===0?'auto':'none';el.dataset.depth=String(depth);el._depth=depth;
+    setBlur(el,0);
   });
   slots.current=cards[index];slots.prev=cards[idx(-1)];slots.next1=cards[idx(1)];moving=[];
 }
@@ -218,31 +218,43 @@ function vw(){return deckWidth}
 function tf(x,y,s=1,r=0){return 'translate3d(calc(-50% + '+x+'px),calc(-50% + '+y+'px),0) scale('+s+') rotate('+r+'deg)'}
 function prevBase(){return -(vw()*.90)}
 function out(dir){return dir*vw()*1.10}
+const poses=[];
 function depthPose(depth){
+  if(poses[depth])return poses[depth];
   // Each real card has its own depth. Compress deep stacks into the available margin.
   const d=Math.max(0,depth),offset=26*(1-Math.exp(-d/3));
-  return {x:offset*.65,y:offset,s:1-.055*(1-Math.exp(-d/3))};
+  return poses[depth]={x:offset*.65,y:offset,s:1-.055*offset/26};
 }
 function restTransform(depth){const p=depthPose(depth);return tf(p.x,p.y,p.s)}
+function setBlur(el,amount){
+  if(el._blur===amount)return;
+  el._blur=amount;el._image.style.filter=amount?'blur('+amount+'px)':'none';
+}
+let motionForward=null;
 function beginMotion(){
+  motionForward=null;
   moving=[...new Set([slots.current,slots.prev,...Array.from({length:Math.min(6,items.length)},(_,i)=>cards[idx(i)])])];
-  moving.forEach(el=>{el.style.transition='none';el.style.willChange='transform';$('.stack-image',el).style.transition='filter 140ms ease-out'});
+  moving.forEach(el=>{el.style.transition='none';el.style.willChange='transform';
+    el._from=depthPose(el._depth);el._next=depthPose(el._depth-1);el._prev=depthPose(el._depth+1);
+  });
 }
 function paintMotion(x,p,blur=0){
   const forward=x<=0,previous=slots.prev;
+  if(motionForward!==forward){
+    moving.forEach(el=>{el.style.zIndex=String(!forward&&el===previous?items.length+1:items.length-el._depth)});
+    motionForward=forward;
+  }
   moving.forEach(el=>{
-    const depth=Number(el.dataset.depth);
-    el.style.zIndex=String(items.length-depth);
     if(el===slots.current){
-      el.style.transform=tf(x,0,1,reducedMotion.matches?0:clamp(x/cardWidth*1.1,-.8,.8));
+      el.style.transform=tf(x,0,1,reducedMotion.matches?0:clamp(x/cardWidth*9,-5,5));
     }else if(!forward&&el===previous){
       // Move the actual last card to the front; no duplicate image is inserted.
-      el.style.zIndex=String(items.length+1);el.style.transform=tf(lerp(prevBase(),0,p),0,lerp(.985,1,p));
+      el.style.transform=tf(lerp(prevBase(),0,p),0,lerp(.985,1,p));
     }else{
-      const a=depthPose(depth),b=depthPose(forward?depth-1:depth+1);
+      const a=el._from,b=forward?el._next:el._prev;
       el.style.transform=tf(lerp(a.x,b.x,p),lerp(a.y,b.y,p),lerp(a.s,b.s,p));
     }
-    if(el===slots.current||el===previous)$('.stack-image',el).style.filter=blur?'blur('+blur+'px)':'none';
+    if(el===slots.current||el===previous)setBlur(el,blur);
   });
 }
 
@@ -281,7 +293,7 @@ function wait(el,cb,ms=220){
 }
 function spring(){
   trans(210);
-  moving.forEach(el=>{el.style.transform=restTransform(Number(el.dataset.depth));$('.stack-image',el).style.filter='none'});
+  moving.forEach(el=>{el.style.transform=restTransform(el._depth);setBlur(el,0)});
   settleCancel=wait(slots.current,()=>{clearInline();settleCancel=null},210);
 }
 function finishNext(){
