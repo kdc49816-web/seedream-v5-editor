@@ -1,6 +1,6 @@
 (()=>{
 'use strict';
-window.__albumCardVersion='v15-smooth-review-deck';
+window.__albumCardVersion='v16-large-fluid-deck';
 
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const DB='seedream-studio-db',VER=1,mod=(n,m)=>((n%m)+m)%m;
@@ -12,7 +12,17 @@ let editingReviewId='';
 let deckWidth=400,cardWidth=320,pointerId=null,settleCancel=null,velocity=0,lastX=0,lastTime=0;
 const originalUrls=new Map(),previewUrls=new Map(),previewJobs=new Map();
 const roles=['role-current','role-prev','role-prev2','role-next1','role-next2','role-next3','role-spare','current'];
-const PREVIEW_MAX=1000;
+const PREVIEW_MAX=window.innerWidth<=720?880:1100;
+const reducedMotion=window.matchMedia('(prefers-reduced-motion: reduce)');
+let warmTimer=0;
+function warmFarPreview(){
+  clearTimeout(warmTimer);
+  warmTimer=setTimeout(()=>{
+    if(view!=='stack'||!items.length)return;
+    if(active||animating){warmFarPreview();return}
+    [5,-3].forEach(o=>previewFor(items[idx(o)]).catch(()=>{}));
+  },180);
+}
 
 function key(item){return String(item?.id??'')}
 function originalSrc(item){
@@ -178,7 +188,7 @@ async function refresh(){
   }
   index=mod(index,items.length);makePool();await initialFill();slots.loading.remove();slots.loading=null;updateCount();
   // 后续远端预览提前做，不触碰任何可见卡片
-  [5,-3].forEach(o=>previewFor(items[idx(o)]).catch(()=>{}));
+  warmFarPreview();
 }
 function setView(v){
   view=v==='stack'?'stack':'grid';
@@ -200,7 +210,9 @@ function out(dir){return dir*vw()*1.10}
 function frame(){
   raf=0;if(!pending||!active||animating||!slots)return;
   const x=pending.x,p=clamp(Math.abs(x)/(cardWidth*.72),0,1);
-  slots.current.style.transform=tf(x,0,1);
+  const lift=reducedMotion.matches?0:Math.sin(p*Math.PI)*3;
+  const tilt=reducedMotion.matches?0:clamp(x/cardWidth*3,-1.8,1.8);
+  slots.current.style.transform=tf(x,-lift,1+lift*.002,tilt);
   if(x<0){
     // 后面的 next1 就是之后的 current，不换图。
     slots.next1.style.transform=tf(lerp(10,0,p),lerp(12,0,p),lerp(.975,1,p));
@@ -231,6 +243,7 @@ function onMove(e){
   if(Math.abs(dx)>Math.abs(dy)){e.preventDefault();pending={x:dx,y:dy};if(!raf)raf=requestAnimationFrame(frame)}
 }
 function trans(ms=220){
+  if(reducedMotion.matches)ms=1;
   [slots.current,slots.prev,slots.next1,slots.next2,slots.next3].forEach(el=>el.style.transition='transform '+ms+'ms cubic-bezier(.18,.72,.24,1), opacity '+ms+'ms linear');
 }
 function clearInline(){
@@ -243,9 +256,10 @@ function wait(el,cb,ms=220){
 }
 function spring(){
   trans(180);
+  if(!reducedMotion.matches)slots.current.style.transition='transform 220ms cubic-bezier(.2,.85,.3,1.12)';
     slots.current.style.transform=tf(0,0,1);slots.prev.style.transform=tf(prevBase(),0,.975);slots.next1.style.transform=tf(10,12,.975);slots.next2.style.transform=tf(20,24,.95);
     slots.next2.style.opacity='1';slots.next3.style.transform=tf(30,36,.925);slots.next3.style.opacity='0';
-  settleCancel=wait(slots.current,()=>{clearInline();settleCancel=null},180);
+  settleCancel=wait(slots.current,()=>{clearInline();settleCancel=null},220);
 }
 async function loadFarForward(el){
   el.style.opacity='0';setRole(el,'role-spare');
@@ -261,12 +275,12 @@ function finishNext(){
   slots.prev2=oldPrev;slots.prev=oldCurrent;slots.current=slots.next1;slots.next1=slots.next2;slots.next2=slots.next3;slots.next3=slots.spare;slots.spare=oldPrev2;
   resetRoles();clearInline();updateCount();animating=false;
   // 只有最远、完全不可见的 spare 才换新图
-  assign(slots.spare,items[idx(4)],idx(4)).then(()=>previewFor(items[idx(5)]).catch(()=>{}));
+  assign(slots.spare,items[idx(4)],idx(4)).then(warmFarPreview);
 }
 function next(){
   if(animating)return;if(!slots.next1._ready){spring();return}animating=true;active=false;
   const ms=clamp(240-Math.abs(dx)/cardWidth*85-Math.abs(velocity)*35,130,240);trans(ms);
-    slots.current.style.transform=tf(out(-1),0,1);
+    slots.current.style.transform=tf(out(-1),0,1,reducedMotion.matches?0:-2);
     slots.next1.style.transform=tf(0,0,1);
     slots.next2.style.transform=tf(10,12,.975);slots.next2.style.opacity='1';
     slots.next3.style.transform=tf(20,24,.95);slots.next3.style.opacity='1';
@@ -278,7 +292,7 @@ function finishPrev(){
   slots.spare=oldNext3;slots.next3=oldNext2;slots.next2=oldNext1;slots.next1=oldCurrent;slots.current=oldPrev;slots.prev=oldPrev2;slots.prev2=oldSpare;
   resetRoles();clearInline();updateCount();animating=false;
   // 只有最远、完全不可见的 prev2 才换新图
-  assign(slots.prev2,items[idx(-2)],idx(-2)).then(()=>previewFor(items[idx(-3)]).catch(()=>{}));
+  assign(slots.prev2,items[idx(-2)],idx(-2)).then(warmFarPreview);
 }
 function prev(){
   if(animating)return;if(!slots.prev._ready){spring();return}animating=true;active=false;

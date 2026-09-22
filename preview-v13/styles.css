@@ -70,3 +70,23 @@
 .stack-caption{background:rgba(12,13,16,.82)}
 .review-entry{background:#fff}
 .stack-card.role-prev{transform:translate3d(calc(-50% + var(--prev-offset,-400px)),-50%,0) scale(.975)}
+
+/* Larger photos, with enough space for the two visible backing cards. */
+.stack-viewport{height:min(74svh,680px);min-height:420px}
+.stack-card{width:min(86%,460px);height:calc(100% - 86px)}
+.stack-image-wrap{display:block}
+.stack-image{position:absolute;inset:0}
+.stack-card.role-prev2,.stack-card.role-spare{will-change:auto}
+.stack-swipe-hint{top:8px;padding:4px 9px}
+.review-entry{top:54px;transform:none;min-height:44px;width:46px;gap:4px;transition:transform 130ms ease}
+.review-entry:active{transform:scale(.94)}
+.stack-nav .btn{transition:transform 130ms ease}
+.stack-nav .btn:active{transform:scale(.96)}
+@media(max-width:720px){
+  .album-stack{padding:8px}
+  .stack-viewport{height:min(68svh,610px);min-height:390px}
+  .stack-card{width:calc(100% - 32px);max-width:420px;height:calc(100% - 78px)}
+  .stack-card-shell{border-radius:18px}
+  .review-entry{right:7px;top:36px}
+}
+@media(prefers-reduced-motion:reduce){.review-entry,.stack-nav .btn{transition:none}}
