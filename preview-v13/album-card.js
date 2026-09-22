@@ -1,6 +1,6 @@
 (()=>{
 'use strict';
-window.__albumCardVersion='v18-bottom-pivot';
+window.__albumCardVersion='v19-smooth-settle';
 
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const DB='seedream-studio-db',VER=1,mod=(n,m)=>((n%m)+m)%m;
@@ -215,7 +215,7 @@ function measureDeck(){
   slots?.deck.style.setProperty('--prev-offset',(-deckWidth*.9)+'px');
 }
 function vw(){return deckWidth}
-function tf(x,y,s=1,r=0){return 'translate3d(calc(-50% + '+x+'px),calc(-50% + '+y+'px),0) scale('+s+') rotate('+r+'deg)'}
+function tf(x,y,s=1,r=0){return 'translate(calc(-50% + '+x+'px),calc(-50% + '+y+'px)) scale('+s+') rotate('+r+'deg)'}
 function prevBase(){return -(vw()*.90)}
 function out(dir){return dir*vw()*1.10}
 const poses=[];
@@ -261,7 +261,7 @@ function paintMotion(x,p,blur=0){
 function frame(){
   raf=0;if(!pending||!active||animating||!slots)return;
   const x=pending.x,p=clamp(Math.abs(x)/(cardWidth*.72),0,1);
-  paintMotion(x,p,reducedMotion.matches||Math.abs(x)<6?0:.55);
+  paintMotion(x,p,reducedMotion.matches||Math.abs(x)<6?0:.4);
 }
 function onDown(e){
   if(view!=='stack'||animating||items.length<=1||!slots?.current?._ready||!e.target.closest('.role-current .stack-card-shell'))return;
@@ -279,9 +279,9 @@ function onMove(e){
   dx=e.clientX-sx;dy=e.clientY-sy;
   if(Math.abs(dx)>Math.abs(dy)){e.preventDefault();pending={x:dx,y:dy};if(!raf)raf=requestAnimationFrame(frame)}
 }
-function trans(ms=220){
+function trans(ms=400){
   if(reducedMotion.matches)ms=1;
-  moving.forEach(el=>el.style.transition='transform '+ms+'ms cubic-bezier(.22,.65,.3,1)');
+  moving.forEach(el=>el.style.transition='transform '+ms+'ms cubic-bezier(.25,.46,.45,1)');
 }
 function clearInline(){
   resetRoles();
@@ -292,28 +292,28 @@ function wait(el,cb,ms=220){
   el.addEventListener('transitionend',end);timer=setTimeout(end,ms+60);return cancel;
 }
 function spring(){
-  trans(210);
-  moving.forEach(el=>{el.style.transform=restTransform(el._depth);setBlur(el,0)});
-  settleCancel=wait(slots.current,()=>{clearInline();settleCancel=null},210);
+  trans(320);
+  moving.forEach(el=>{el.style.transform=restTransform(el._depth)});
+  settleCancel=wait(slots.current,()=>{clearInline();settleCancel=null},320);
 }
 function finishNext(){
   index=idx(1);
-  resetRoles();updateCount();animating=false;prepareNearby().then(warmFarPreview);
+  resetRoles();updateCount();animating=false;warmFarPreview();
 }
 function next(){
   if(animating)return;if(!slots.next1._ready){spring();return}animating=true;active=false;
-  const ms=clamp(240-Math.abs(dx)/cardWidth*85-Math.abs(velocity)*35,130,240);trans(ms);
-  paintMotion(out(-1),1,0);
+  const ms=reducedMotion.matches?1:clamp(440-Math.abs(dx)/cardWidth*65-Math.abs(velocity)*12,340,440);trans(ms);
+  paintMotion(out(-1),1,slots.current._blur);
   settleCancel=wait(slots.current,()=>{settleCancel=null;finishNext()},ms);
 }
 function finishPrev(){
   index=idx(-1);
-  resetRoles();updateCount();animating=false;prepareNearby().then(warmFarPreview);
+  resetRoles();updateCount();animating=false;warmFarPreview();
 }
 function prev(){
   if(animating)return;if(!slots.prev._ready){spring();return}animating=true;active=false;
-  const ms=clamp(240-Math.abs(dx)/cardWidth*85-Math.abs(velocity)*35,130,240);trans(ms);
-  paintMotion(1,1,0);slots.current.style.transform=restTransform(1);
+  const ms=reducedMotion.matches?1:clamp(440-Math.abs(dx)/cardWidth*65-Math.abs(velocity)*12,340,440);trans(ms);
+  paintMotion(1,1,slots.current._blur);slots.current.style.transform=restTransform(1);
   settleCancel=wait(slots.prev,()=>{settleCancel=null;finishPrev()},ms);
 }
 function onUp(e){
