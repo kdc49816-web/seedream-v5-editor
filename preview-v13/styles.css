@@ -41,17 +41,23 @@
 .stack-card.role-current .stack-card-shell{touch-action:pan-y;user-select:none;-webkit-user-select:none}
 .stack-image-wrap{position:relative;width:100%;height:100%;background:#f7f7f8;display:grid;place-items:center}
 .stack-image{width:100%;height:100%;object-fit:contain;display:block;-webkit-user-drag:none;user-select:none;transform:translateZ(0);backface-visibility:hidden;-webkit-backface-visibility:hidden}
+.stack-caption{position:absolute;left:12px;right:12px;bottom:12px;z-index:3;padding:10px 12px;border-radius:12px;background:rgba(12,13,16,.72);backdrop-filter:blur(7px);-webkit-backdrop-filter:blur(7px);color:#fff;font-size:14px;line-height:1.5;text-align:center;white-space:pre-wrap;overflow-wrap:anywhere;text-shadow:0 1px 2px rgba(0,0,0,.28);pointer-events:none}
 .stack-meta{display:none!important}
 .stack-deck.is-dragging .stack-card-shell{box-shadow:none!important}
 .stack-deck.is-dragging .role-current,.stack-deck.is-dragging .role-prev,.stack-deck.is-dragging .role-next1,.stack-deck.is-dragging .role-next2{will-change:transform}
 .stack-nav{display:flex;justify-content:center;gap:10px;margin-top:12px}.stack-nav .btn{min-width:110px}
-.stack-swipe-hint{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);font-size:10px;color:#747881;background:rgba(255,255,255,.9);padding:6px 10px;border-radius:999px;border:1px solid rgba(0,0,0,.05);white-space:nowrap;pointer-events:none;z-index:9}
+.stack-swipe-hint{position:absolute;left:50%;top:14px;transform:translateX(-50%);font-size:10px;color:#747881;background:rgba(255,255,255,.9);padding:6px 10px;border-radius:999px;border:1px solid rgba(0,0,0,.05);white-space:nowrap;pointer-events:none;z-index:9}
 .stack-loading{position:absolute;inset:0;display:grid;place-items:center;color:#777;font-size:12px}
+.review-entry{position:absolute;right:10px;top:50%;z-index:12;transform:translateY(-50%);width:46px;min-height:62px;padding:9px 6px;border:0;border-radius:15px;background:rgba(255,255,255,.94);box-shadow:0 8px 24px rgba(18,22,30,.16);color:#3c4048;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:7px;font-size:12px;font-weight:800;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.review-entry i{width:7px;height:7px;border-radius:50%;background:#d8dade}.review-entry.has-review{color:var(--red)}.review-entry.has-review i{background:var(--red);box-shadow:0 0 0 4px var(--red-soft)}
+.review-modal-card textarea{min-height:130px;max-height:45vh}.review-count{text-align:right;margin-top:5px;color:var(--muted);font-size:10px}.review-actions{align-items:center}.review-actions-spacer{flex:1}.review-actions #deleteReviewBtn{color:var(--red);background:var(--red-soft)}
 @media(max-width:720px){
   .album-actions{width:100%;flex-wrap:wrap}.album-view-switch{width:100%;justify-content:space-between}.album-view-switch button{flex:1}
   .stack-topline{flex-direction:column;align-items:flex-start;gap:4px}
   .stack-viewport{height:min(59vh,480px);min-height:370px;border-radius:18px}
   .stack-card{width:min(78vw,320px);height:min(51vh,410px)}
+  .stack-caption{left:10px;right:10px;bottom:10px;padding:9px 10px;font-size:13px}
+  .review-entry{right:5px;width:43px;min-height:58px;border-radius:14px}
   .stack-nav .btn{flex:1;min-width:0}
 }
 @media(max-width:390px){.stack-card{width:min(77vw,305px);height:min(49vh,390px)}.stack-viewport{min-height:355px}}
