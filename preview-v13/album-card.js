@@ -1,6 +1,6 @@
 (()=>{
 'use strict';
-window.__albumCardVersion='v13-fixed-slot-promotion';
+window.__albumCardVersion='v14-photo-review';
 
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const DB='seedream-studio-db',VER=1,mod=(n,m)=>((n%m)+m)%m;
@@ -8,6 +8,7 @@ const clamp=(n,a,b)=>Math.max(a,Math.min(b,n)),lerp=(a,b,p)=>a+(b-a)*p;
 
 let view='grid',items=[],index=0,slots=null;
 let active=false,animating=false,sx=0,sy=0,dx=0,dy=0,started=0,raf=0,pending=null,lastTap=0;
+let editingReviewId='';
 const originalUrls=new Map(),previewUrls=new Map(),previewJobs=new Map();
 const roles=['role-current','role-prev','role-prev2','role-next1','role-next2','role-next3','role-spare','current'];
 const PREVIEW_MAX=1000;
@@ -65,9 +66,18 @@ function readAlbum(){
     }catch{resolve([])}};
   });
 }
+function writeAlbum(item){
+  return new Promise((resolve,reject)=>{
+    const req=indexedDB.open(DB,VER);req.onerror=()=>reject(req.error);req.onupgradeneeded=()=>{};
+    req.onsuccess=()=>{try{
+      const db=req.result,tx=db.transaction('album','readwrite');tx.objectStore('album').put(item);
+      tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
+    }catch(error){reject(error)}};
+  });
+}
 function createCard(){
   const el=document.createElement('article');el.className='stack-card';
-  el.innerHTML='<div class="stack-card-shell"><div class="stack-image-wrap"><img class="stack-image" draggable="false" alt=""><div class="stack-meta"><strong></strong><span></span></div></div></div>';
+  el.innerHTML='<div class="stack-card-shell"><div class="stack-image-wrap"><img class="stack-image" draggable="false" alt=""><div class="stack-caption" aria-live="polite"></div><div class="stack-meta"><strong></strong><span></span></div></div></div>';
   el._ready=false;el._itemId='';return el;
 }
 function idx(o){return mod(index+o,items.length)}
@@ -91,6 +101,8 @@ async function assign(el,item,n){
   });
   if(el._itemId!==id)return;
   el._ready=true;
+  const caption=$('.stack-caption',el),review=String(item.review||'').trim();
+  caption.textContent=review;caption.classList.toggle('hidden',!review);
   $('.stack-meta strong',el).textContent=item.name||'相册图片';
   $('.stack-meta span',el).textContent='第 '+(n+1)+' 张';
 }
@@ -108,6 +120,40 @@ async function initialFill(){
 function updateCount(){
   $('#albumStackCounter').textContent=(index+1)+' / '+items.length;
   $('#stackPrevBtn').disabled=items.length<=1;$('#stackNextBtn').disabled=items.length<=1;
+  updateReviewEntry();
+}
+function currentItem(){return items[index]||null}
+function updateReviewEntry(){
+  const btn=$('#reviewEntryBtn'),item=currentItem();if(!btn)return;
+  btn.classList.toggle('hidden',!item);btn.classList.toggle('has-review',!!String(item?.review||'').trim());
+  btn.setAttribute('aria-label',String(item?.review||'').trim()?'修改当前照片评价':'给当前照片写评价');
+}
+function openReview(){
+  const item=currentItem(),dlg=$('#reviewModal'),input=$('#reviewInput');if(!item||!dlg||!input)return;
+  editingReviewId=key(item);input.value=String(item.review||'');
+  $('#reviewCount').textContent=String(input.value.length);
+  const has=!!input.value.trim();$('#reviewModalTitle').textContent=has?'修改评价':'写评价';$('#deleteReviewBtn').classList.toggle('hidden',!has);
+  if(!dlg.open)dlg.showModal();setTimeout(()=>input.focus(),40);
+}
+async function persistReview(value){
+  const item=items.find(x=>key(x)===editingReviewId);if(!item)return;
+  const review=String(value||'').trim();
+  if(review)item.review=review;else delete item.review;
+  await writeAlbum(item);
+  document.dispatchEvent(new CustomEvent('album-review-changed',{detail:{id:key(item),review}}));
+  if(slots)Object.values(slots).forEach(el=>{if(el?._itemId===key(item)){const caption=$('.stack-caption',el);if(caption){caption.textContent=review;caption.classList.toggle('hidden',!review)}}});
+  updateReviewEntry();
+}
+async function saveReview(){
+  const input=$('#reviewInput'),value=input?.value.trim()||'';if(!value){input?.focus();return}
+  try{await persistReview(value);$('#reviewModal')?.close();notify('评价已保存')}catch{notify('评价保存失败，请重试')}
+}
+async function deleteReview(){
+  const item=items.find(x=>key(x)===editingReviewId);if(!item?.review||!confirm('删除这条评价？'))return;
+  try{await persistReview('');$('#reviewModal')?.close();notify('评价已删除')}catch{notify('评价删除失败，请重试')}
+}
+function notify(text){
+  const el=$('#toast');if(!el)return;el.textContent=text;el.classList.add('show');clearTimeout(notify.timer);notify.timer=setTimeout(()=>el.classList.remove('show'),2200);
 }
 function makePool(){
   const deck=$('#albumStackDeck');deck.replaceChildren();
@@ -243,6 +289,11 @@ document.addEventListener('DOMContentLoaded',()=>{
   $('#stackPrevBtn')?.addEventListener('click',()=>program(-1));$('#stackNextBtn')?.addEventListener('click',()=>program(1));
   $('#albumUpload')?.addEventListener('change',()=>setTimeout(()=>{if(view==='stack')refresh()},450));
   document.querySelector('[data-tab="album"]')?.addEventListener('click',()=>setTimeout(()=>{if(view==='stack')refresh()},60));
+  $('#reviewEntryBtn')?.addEventListener('click',openReview);
+  $('#reviewInput')?.addEventListener('input',e=>{$('#reviewCount').textContent=String(e.target.value.length)});
+  $('#saveReviewBtn')?.addEventListener('click',saveReview);
+  $('#deleteReviewBtn')?.addEventListener('click',deleteReview);
+  $('#reviewModal')?.addEventListener('close',()=>{editingReviewId=''});
   setView('grid');
 });
 window.addEventListener('beforeunload',()=>{
