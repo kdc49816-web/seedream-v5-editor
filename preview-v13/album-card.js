@@ -1,6 +1,6 @@
 (()=>{
 'use strict';
-window.__albumCardVersion='v14-photo-review';
+window.__albumCardVersion='v15-smooth-review-deck';
 
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
 const DB='seedream-studio-db',VER=1,mod=(n,m)=>((n%m)+m)%m;
@@ -9,6 +9,7 @@ const clamp=(n,a,b)=>Math.max(a,Math.min(b,n)),lerp=(a,b,p)=>a+(b-a)*p;
 let view='grid',items=[],index=0,slots=null;
 let active=false,animating=false,sx=0,sy=0,dx=0,dy=0,started=0,raf=0,pending=null,lastTap=0;
 let editingReviewId='';
+let deckWidth=400,cardWidth=320,pointerId=null,settleCancel=null,velocity=0,lastX=0,lastTime=0;
 const originalUrls=new Map(),previewUrls=new Map(),previewJobs=new Map();
 const roles=['role-current','role-prev','role-prev2','role-next1','role-next2','role-next3','role-spare','current'];
 const PREVIEW_MAX=1000;
@@ -129,6 +130,7 @@ function updateReviewEntry(){
   btn.setAttribute('aria-label',String(item?.review||'').trim()?'修改当前照片评价':'给当前照片写评价');
 }
 function openReview(){
+  if(active||animating)return;
   const item=currentItem(),dlg=$('#reviewModal'),input=$('#reviewInput');if(!item||!dlg||!input)return;
   editingReviewId=key(item);input.value=String(item.review||'');
   $('#reviewCount').textContent=String(input.value.length);
@@ -163,6 +165,7 @@ function makePool(){
   deck.append(prev2,prev,current,next1,next2,next3,spare,hint);
   slots={deck,prev2,prev,current,next1,next2,next3,spare,loading};
   resetRoles();
+  measureDeck();
   deck.addEventListener('pointerdown',onDown,{passive:true});deck.addEventListener('pointermove',onMove,{passive:false});
   deck.addEventListener('pointerup',onUp,{passive:false});deck.addEventListener('pointercancel',onCancel,{passive:true});
   deck.addEventListener('dblclick',e=>{if(e.target.closest('.role-current .stack-card-shell')){e.preventDefault();openCurrent()}});
@@ -184,47 +187,65 @@ function setView(v){
   if(view==='stack')refresh();
 }
 
-function vw(){return $('#albumStackView .stack-viewport')?.clientWidth||window.innerWidth}
+function measureDeck(){
+  deckWidth=$('#albumStackView .stack-viewport')?.clientWidth||window.innerWidth;
+  cardWidth=slots?.current?.offsetWidth||320;
+  slots?.deck.style.setProperty('--prev-offset',(-deckWidth*.9)+'px');
+}
+function vw(){return deckWidth}
 function tf(x,y,s=1,r=0){return 'translate3d(calc(-50% + '+x+'px),calc(-50% + '+y+'px),0) scale('+s+') rotate('+r+'deg)'}
 function prevBase(){return -(vw()*.90)}
 function out(dir){return dir*vw()*1.10}
 
 function frame(){
   raf=0;if(!pending||!active||animating||!slots)return;
-  const x=pending.x,y=pending.y,p=clamp(Math.abs(x)/(vw()*.60),0,1);
-  slots.current.style.transform=tf(x,clamp(y*.04,-8,8),1,x/70);
+  const x=pending.x,p=clamp(Math.abs(x)/(cardWidth*.72),0,1);
+  slots.current.style.transform=tf(x,0,1);
   if(x<0){
     // 后面的 next1 就是之后的 current，不换图。
     slots.next1.style.transform=tf(lerp(10,0,p),lerp(12,0,p),lerp(.975,1,p));
     slots.next2.style.transform=tf(lerp(20,10,p),lerp(24,12,p),lerp(.95,.975,p));
+    slots.next2.style.opacity='1';
+    slots.next3.style.transform=tf(lerp(30,20,p),lerp(36,24,p),lerp(.925,.95,p));slots.next3.style.opacity=String(p);
+    slots.prev.style.transform=tf(prevBase(),0,.975);
   }else if(x>0){
-    slots.prev.style.transform=tf(Math.min(0,x+prevBase()),lerp(10,0,p),lerp(.975,1,p));
+    slots.prev.style.transform=tf(lerp(prevBase(),0,p),0,lerp(.975,1,p));
     slots.next1.style.transform=tf(lerp(10,20,p),lerp(12,24,p),lerp(.975,.95,p));
+    slots.next2.style.transform=tf(lerp(20,30,p),lerp(24,36,p),lerp(.95,.925,p));slots.next2.style.opacity=String(1-p);
+    slots.next3.style.opacity='0';
   }
 }
 function onDown(e){
   if(view!=='stack'||animating||items.length<=1||!slots?.current?._ready||!e.target.closest('.role-current .stack-card-shell'))return;
   // 必须保证将要进入主位的卡已经加载完成，否则不启动手势。
-  active=true;dx=dy=0;sx=e.clientX;sy=e.clientY;started=performance.now();slots.deck.classList.add('is-dragging');
+  if(pointerId!==null)return;
+  if(settleCancel){settleCancel();settleCancel=null;clearInline()}
+  measureDeck();pointerId=e.pointerId;slots.deck.setPointerCapture?.(e.pointerId);
+  active=true;dx=dy=velocity=0;sx=lastX=e.clientX;sy=e.clientY;started=lastTime=performance.now();
 }
 function onMove(e){
-  if(!active||animating)return;dx=e.clientX-sx;dy=e.clientY-sy;
+  if(!active||animating||e.pointerId!==pointerId)return;
+  const now=performance.now(),dt=now-lastTime;
+  if(dt>0){velocity=(e.clientX-lastX)/dt;lastX=e.clientX;lastTime=now}
+  dx=e.clientX-sx;dy=e.clientY-sy;
   if(Math.abs(dx)>Math.abs(dy)){e.preventDefault();pending={x:dx,y:dy};if(!raf)raf=requestAnimationFrame(frame)}
 }
 function trans(ms=220){
-  [slots.current,slots.prev,slots.next1,slots.next2].forEach(el=>el.style.transition='transform '+ms+'ms cubic-bezier(.22,.78,.22,1)');
+  [slots.current,slots.prev,slots.next1,slots.next2,slots.next3].forEach(el=>el.style.transition='transform '+ms+'ms cubic-bezier(.18,.72,.24,1), opacity '+ms+'ms linear');
 }
 function clearInline(){
   [slots.current,slots.prev,slots.prev2,slots.next1,slots.next2,slots.next3,slots.spare].forEach(el=>{el.style.transition='';el.style.transform='';el.style.opacity=''});
 }
 function wait(el,cb,ms=220){
-  let done=false;const end=()=>{if(done)return;done=true;el.removeEventListener('transitionend',end);cb()};
-  el.addEventListener('transitionend',end,{once:true});setTimeout(end,ms+90);
+  let done=false,timer;const cancel=()=>{done=true;clearTimeout(timer);el.removeEventListener('transitionend',end)};
+  const end=e=>{if(done||(e&&(e.target!==el||e.propertyName!=='transform')))return;cancel();cb()};
+  el.addEventListener('transitionend',end);timer=setTimeout(end,ms+60);return cancel;
 }
 function spring(){
-  trans(220);requestAnimationFrame(()=>{
+  trans(180);
     slots.current.style.transform=tf(0,0,1);slots.prev.style.transform=tf(prevBase(),0,.975);slots.next1.style.transform=tf(10,12,.975);slots.next2.style.transform=tf(20,24,.95);
-  });setTimeout(clearInline,250);
+    slots.next2.style.opacity='1';slots.next3.style.transform=tf(30,36,.925);slots.next3.style.opacity='0';
+  settleCancel=wait(slots.current,()=>{clearInline();settleCancel=null},180);
 }
 async function loadFarForward(el){
   el.style.opacity='0';setRole(el,'role-spare');
@@ -243,13 +264,13 @@ function finishNext(){
   assign(slots.spare,items[idx(4)],idx(4)).then(()=>previewFor(items[idx(5)]).catch(()=>{}));
 }
 function next(){
-  if(animating||!slots.next1._ready)return;animating=true;active=false;trans(220);
-  requestAnimationFrame(()=>{
-    slots.current.style.transform=tf(out(-1),0,1,-7);
+  if(animating)return;if(!slots.next1._ready){spring();return}animating=true;active=false;
+  const ms=clamp(240-Math.abs(dx)/cardWidth*85-Math.abs(velocity)*35,130,240);trans(ms);
+    slots.current.style.transform=tf(out(-1),0,1);
     slots.next1.style.transform=tf(0,0,1);
-    slots.next2.style.transform=tf(10,12,.975);
-  });
-  wait(slots.current,finishNext,220);
+    slots.next2.style.transform=tf(10,12,.975);slots.next2.style.opacity='1';
+    slots.next3.style.transform=tf(20,24,.95);slots.next3.style.opacity='1';
+  wait(slots.current,finishNext,ms);
 }
 function finishPrev(){
   index=idx(-1);
@@ -260,28 +281,30 @@ function finishPrev(){
   assign(slots.prev2,items[idx(-2)],idx(-2)).then(()=>previewFor(items[idx(-3)]).catch(()=>{}));
 }
 function prev(){
-  if(animating||!slots.prev._ready)return;animating=true;active=false;trans(220);
-  requestAnimationFrame(()=>{
-    slots.current.style.transform=tf(out(1),0,1,7);
+  if(animating)return;if(!slots.prev._ready){spring();return}animating=true;active=false;
+  const ms=clamp(240-Math.abs(dx)/cardWidth*85-Math.abs(velocity)*35,130,240);trans(ms);
+    slots.current.style.transform=tf(10,12,.975);
     slots.prev.style.transform=tf(0,0,1);
     slots.next1.style.transform=tf(20,24,.95);
-  });
-  wait(slots.current,finishPrev,220);
+    slots.next2.style.transform=tf(30,36,.925);slots.next2.style.opacity='0';
+  wait(slots.prev,finishPrev,ms);
 }
 function onUp(e){
-  if(!active||animating)return;active=false;slots.deck.classList.remove('is-dragging');if(raf){cancelAnimationFrame(raf);raf=0}pending=null;
+  if(e.pointerId!==pointerId)return;pointerId=null;
+  if(!active||animating)return;
+  if(raf){cancelAnimationFrame(raf);raf=0;frame()}active=false;pending=null;
   const elapsed=Math.max(1,performance.now()-started),vel=Math.abs(dx)/elapsed;
   const commit=(Math.abs(dx)>68||(Math.abs(dx)>36&&vel>.38))&&Math.abs(dx)>Math.abs(dy);
   if(commit){if(dx>0)prev();else next();return}
   spring();
   if(Math.abs(dx)<7&&Math.abs(dy)<7&&e.pointerType!=='mouse'){const now=Date.now();if(now-lastTap<330){openCurrent();lastTap=0}else lastTap=now}
 }
-function onCancel(){if(!active)return;active=false;slots.deck.classList.remove('is-dragging');if(raf){cancelAnimationFrame(raf);raf=0}pending=null;spring()}
+function onCancel(){pointerId=null;if(!active)return;active=false;if(raf){cancelAnimationFrame(raf);raf=0}pending=null;spring()}
 function openCurrent(){
   const u=originalSrc(items[index]),dlg=$('#lightbox'),img=$('#lightboxImage');if(!u||!dlg||!img)return;
   img.src=u;img.classList.remove('zoomed');if(!dlg.open)dlg.showModal();
 }
-function program(delta){if(animating||items.length<=1)return;dx=delta<0?1:-1;dy=0;if(delta<0)prev();else next()}
+function program(delta){if(animating||active||!slots||items.length<=1)return;if(settleCancel){settleCancel();settleCancel=null;clearInline()}measureDeck();dx=delta<0?1:-1;dy=velocity=0;if(delta<0)prev();else next()}
 
 document.addEventListener('DOMContentLoaded',()=>{
   $('#albumViewSwitch')?.addEventListener('click',e=>{const b=e.target.closest('[data-album-view]');if(b){e.preventDefault();e.stopPropagation();setView(b.dataset.albumView)}});
