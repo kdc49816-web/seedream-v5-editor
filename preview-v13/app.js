@@ -249,5 +249,9 @@
   }
 
   async function init(){ renderRatios(); bindEvents(); await loadData(); refreshBalance(); bindZoomables(); }
+  document.addEventListener('album-review-changed',e=>{
+    const item=state.album.find(x=>x.id===e.detail?.id);if(!item)return;
+    const review=String(e.detail?.review||'').trim();if(review)item.review=review;else delete item.review;
+  });
   window.addEventListener('beforeunload',revokeTempUrls); init().catch(e=>{console.error(e);toast('页面初始化失败，请刷新重试');});
 })();
