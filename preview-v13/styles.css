@@ -103,3 +103,9 @@
 
 /* Keep the real deep stack in normal painting; promote only nearby moving cards. */
 .stack-card,.stack-card-shell,.stack-image{backface-visibility:visible;-webkit-backface-visibility:visible}
+.reference-zone{display:flex;flex-direction:column;gap:8px;padding:20px 14px;border:1px dashed #e7a6aa;border-radius:14px;background:#fff8f8;cursor:pointer;text-align:center;font-size:12px}
+.reference-zone span{font-size:11px;color:#777;line-height:1.6}.reference-zone.dragover{background:#ffe9eb;border-color:#d92632}
+.input-image-list{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}.input-image-list:empty{display:none}
+.input-image-item{position:relative;width:76px}.input-image-item>button:first-child{padding:0;width:100%;border:1px solid #ddd;border-radius:9px;overflow:hidden;background:#fff;cursor:pointer}
+.input-image-item img{width:74px;height:74px;object-fit:cover;display:block}.input-image-item span{display:block;font-size:11px;padding:5px 0}
+.input-image-item .input-remove{position:absolute;right:-5px;top:-7px;width:26px;height:26px;border:1px solid #eee;border-radius:50%;color:#d92632;background:white;font-size:18px;cursor:pointer}

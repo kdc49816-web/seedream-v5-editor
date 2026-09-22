@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>Seedream v5.0 Pro Editor · Preview v13</title>
-  <link rel="stylesheet" href="./styles.css?v=19" />
+  <link rel="stylesheet" href="./styles.css?v=22" />
 </head>
 <body>
   <div class="app-shell">
@@ -43,15 +43,26 @@
             </div>
 
             <label class="upload-zone" id="editorDropZone">
-              <input id="editorFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/tiff,image/heic,image/heif,.heic,.heif" hidden />
+              <input id="editorFile" type="file" accept="image/jpeg,image/png,image/webp,image/gif,image/bmp,image/tiff,image/heic,image/heif,.heic,.heif" multiple hidden />
               <div id="uploadEmpty" class="upload-empty">
                 <div class="upload-icon">＋</div>
-                <strong>拖入图片，或点击上传</strong>
+                <strong>拖入图片，或点击多选上传</strong>
                 <span>JPEG / PNG / WebP / HEIC 等</span>
               </div>
               <img id="sourcePreview" class="source-preview hidden" alt="原图预览" />
-              <div class="source-overlay hidden" id="sourceOverlay">点击更换原图</div>
+              <div class="source-overlay hidden" id="sourceOverlay">点击继续添加原图</div>
             </label>
+            <div id="sourceList" class="input-image-list" aria-label="已上传原图"></div>
+            <div class="field-block">
+              <div class="field-title"><label for="referenceFile">参考图（可选）</label><span id="inputImageCount">共 0 / 10 张</span></div>
+              <label class="reference-zone" id="referenceDropZone">
+                <input id="referenceFile" type="file" accept="image/*,.heic,.heif" multiple hidden />
+                <strong>＋ 添加参考图，可一次选多张</strong>
+                <span>只参考提示词里明确写到的内容，不参考五官、长相和表情。</span>
+              </label>
+              <div id="referenceList" class="input-image-list" aria-label="已上传参考图"></div>
+              <p class="muted">原图与参考图合计最多 10 张，每张最大 30MB。第一张原图作为主图，可点击缩略图设为主图。多图会增加接口费用。</p>
+            </div>
 
             <div class="field-block">
               <div class="field-title"><label for="prompt">告诉它怎么改</label><span id="promptCount">0 字</span></div>
@@ -213,7 +224,7 @@
   </dialog>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./app.js?v=14"></script>
+  <script src="./app.js?v=22"></script>
   <script src="./album-card.js?v=21"></script>
 </body>
 </html>

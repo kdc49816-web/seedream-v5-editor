@@ -17,7 +17,7 @@
   const $ = (s, root = document) => root.querySelector(s);
   const $$ = (s, root = document) => [...root.querySelectorAll(s)];
   const state = {
-    tab: 'editor', sourceDataUrl: '', sourceName: '', sourceDims: null,
+    tab: 'editor', sourceDataUrl: '', sourceName: '', sourceDims: null, sources: [], references: [], uploading: false,
     ratio: 'original', resolution: '1K', analysis: null, generating: false,
     currentResult: null, history: [], album: [], albumPage: 1, arranging: false,
     dragId: null, toastTimer: null
@@ -93,13 +93,37 @@
   function selectedSize(){ const ratio=selectedRatio(); return sizePresets[state.resolution]?.[ratio] || sizePresets[state.resolution]['1:1']; }
   function updateOutputHint(){ const ratio=selectedRatio(),size=selectedSize(); $('#ratioHint').textContent=state.sourceDims?`${state.sourceDims.width} × ${state.sourceDims.height} → ${ratio}`:'上传后自动识别'; if(state.currentResult) $('#resultSubtitle').textContent=`${ratio} · ${size.replace('*',' × ')}`; }
 
-  async function setSource(file){
-    if(!file) return; if(file.size>30*1024*1024){toast('原图不能超过 30MB');return;}
-    if(!file.type.startsWith('image/') && !/\.(jpe?g|png|webp|gif|bmp|tiff?|heic|heif)$/i.test(file.name)){toast('请选择图片文件');return;}
-    const data=await fileToDataUrl(file); state.sourceDataUrl=data; state.sourceName=file.name; state.sourceDims=await imageDims(data); state.currentResult=null;
-    $('#uploadEmpty').classList.add('hidden'); $('#sourcePreview').classList.remove('hidden'); $('#sourceOverlay').classList.remove('hidden'); $('#sourcePreview').src=data; $('#sourceMeta').textContent=state.sourceDims?`${state.sourceDims.width} × ${state.sourceDims.height}`:file.name;
+  function renderInputs(){
+    for(const [kind,list] of [['source',state.sources],['reference',state.references]]){
+      $('#'+kind+'List').innerHTML=list.map((item,i)=>`<div class="input-image-item"><button type="button" data-input-preview="${kind}" data-index="${i}" aria-label="${kind==='source'?'设为主图':'查看参考图'} ${i+1}"><img src="${escapeHtml(item.data)}" alt="${escapeHtml(item.name)}"><span>${kind==='source'?(i===0?'主图':'原图 '+(i+1)):'参考图 '+(i+1)}</span></button><button type="button" class="input-remove" data-input-remove="${kind}" data-index="${i}" aria-label="移除${kind==='source'?'原图':'参考图'} ${i+1}">×</button></div>`).join('');
+    }
+    $('#inputImageCount').textContent=`共 ${state.sources.length+state.references.length} / 10 张`;
+  }
+  function syncSource(){
+    const item=state.sources[0];state.sourceDataUrl=item?.data||'';state.sourceName=item?.name||'';state.sourceDims=item?.dims||null;state.analysis=null;state.currentResult=null;
+    $('#uploadEmpty').classList.toggle('hidden',!!item);$('#sourcePreview').classList.toggle('hidden',!item);$('#sourceOverlay').classList.toggle('hidden',!item);
+    if(item)$('#sourcePreview').src=item.data;else $('#sourcePreview').removeAttribute('src');
+    $('#sourceMeta').textContent=state.sourceDims?`${state.sourceDims.width} × ${state.sourceDims.height}`:'每张最大 30MB';
     state.ratio='original'; renderRatios(); updateOutputHint(); $('#canvasPlaceholder').classList.remove('hidden'); $('#resultImage').classList.add('hidden'); $('#resultSubtitle').textContent='原图已就绪'; $('#addResultAlbumBtn').classList.add('hidden'); $('#downloadResultBtn').classList.add('hidden');
-    if($('#personProtect').checked) analyzePerson();
+    $('#analysisStatus').textContent=item?'使用主图进行人物保护':'请先上传原图';
+    if(item&&$('#personProtect').checked) analyzePerson();
+  }
+
+  async function addInputFiles(files,kind){
+    if(state.generating||state.uploading){toast('请等当前处理完成后再添加图片');return;}
+    const arr=Array.from(files||[]);if(!arr.length)return;
+    state.uploading=true;$('#generateBtn').disabled=true;const old=state.sourceDataUrl;let added=0;const errors=[];
+    try{for(const file of arr){
+      if(state.sources.length+state.references.length>=10){errors.push('最多共 10 张');break;}
+      if(file.size>30*1024*1024){errors.push(file.name+' 超过 30MB');continue;}
+      if(!file.type.startsWith('image/')&&!/\.(jpe?g|png|webp|gif|bmp|tiff?|heic|heif)$/i.test(file.name)){errors.push(file.name+' 不是图片');continue;}
+      try{const data=await fileToDataUrl(file),dims=await imageDims(data);if(!dims){errors.push(file.name+' 无法读取，请转成 JPEG 或 PNG');continue;}
+        (kind==='source'?state.sources:state.references).push({name:file.name,data,dims});added++;
+      }catch{errors.push(file.name+' 读取失败');}
+    }
+    renderInputs();if(old!==(state.sources[0]?.data||''))syncSource();
+    toast(`已添加 ${added} 张${errors.length?'；'+errors.join('；'):''}`);
+    }finally{state.uploading=false;$('#generateBtn').disabled=false;}
   }
 
   function atlasKey(){ return localStorage.getItem(LS.atlas)||''; }
@@ -128,6 +152,7 @@
   }
 
   async function analyzePerson(){
+    const analyzedSource=state.sourceDataUrl;
     if(!state.sourceDataUrl) return; const key=deepseekKey(); if(!key){ state.analysis=null; $('#analysisStatus').textContent='未填写 DeepSeek Key，将使用基础人物保护'; return; }
     $('#analysisStatus').textContent='DeepSeek 正在识别人脸与人体场景…';
     try{
@@ -138,14 +163,20 @@
         data=await jsonFetch(`${DEEPSEEK_BASE}/chat/completions`,{method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${key}`},body:JSON.stringify({model:'deepseek-flash',messages:[{role:'user',content:[{type:'text',text:prompt},{type:'image_url',image_url:{url:state.sourceDataUrl}}]}],temperature:0,response_format:{type:'json_object'}})});
         let txt=data?.choices?.[0]?.message?.content||'{}'; txt=txt.replace(/^```json\s*|```$/g,'').trim(); data=JSON.parse(txt);
       }
+      if(state.sourceDataUrl!==analyzedSource)return;
       state.analysis=data; $('#analysisStatus').textContent=data.has_person?`${data.person_count||1} 人 · ${data.face_visibility==='clear'?'人脸清晰':data.occlusion?'存在遮挡':'已识别人像'}`:'未检测到人物';
-    }catch(e){ state.analysis=null; $('#analysisStatus').textContent='人物分析失败，已使用基础保护'; }
+    }catch(e){ if(state.sourceDataUrl!==analyzedSource)return;state.analysis=null; $('#analysisStatus').textContent='人物分析失败，已使用基础保护'; }
   }
 
   function buildPrompt(){
     let p=$('#prompt').value.trim(); if(!p) return '';
     if($('#personProtect').checked && (state.analysis?.has_person || /人物|人像|男人|女人|男生|女生|女孩|男孩|person|people|woman|man/i.test(p))){
       const add=personProtectionText(state.analysis)||'保持人物长相、五官、身份与原图一致；保持身体结构、手部和关节自然，不添加多余肢体。'; p+=`\n\n【智能人物保护】\n${add}`;
+    }
+    if(state.sources.length>1||state.references.length){
+      const mapping=state.sources.map((_,i)=>`输入图片 ${i+1} = ${i===0?'主图（原图 1）':'原图 '+(i+1)}`).concat(state.references.map((_,i)=>`输入图片 ${state.sources.length+i+1} = 参考图 ${i+1}`));
+      p+='\n\n【输入图片用途】\n'+mapping.join('\n')+'\n以主图作为默认编辑主体。其他原图按用户提示词使用，未明确要求时不要混合不同人物的脸。';
+      if(state.references.length)p+='\n【参考图使用限制，必须遵守】\n参考图只提供用户提示词明确要求参考的内容（例如提示词指定的姿势、服装、背景、构图或光线）。未明确指定的内容不得自动借用。所有参考图均不参与五官、长相、脸型、人物身份和表情的参考，不得换脸、混脸或复制参考图人物表情。人物长相与表情默认以主图为准；若用户要求修改表情，按文字描述修改，仍不得从参考图复制。上述智能人物保护仅针对原图，不针对参考图。';
     }
     return p;
   }
@@ -164,10 +195,10 @@
   }
 
   async function generate(){
-    if(state.generating) return; if(!atlasKey()){openApi();toast('先保存 AtlasCloud API Key');return;} if(!state.sourceDataUrl){toast('先上传一张原图');return;} const prompt=buildPrompt(); if(!prompt){toast('写一下你想怎么修改图片');return;}
+    if(state.generating||state.uploading) return; if(!atlasKey()){openApi();toast('先保存 AtlasCloud API Key');return;} if(!state.sourceDataUrl){toast('先上传一张原图');return;} const prompt=buildPrompt(); if(!prompt){toast('写一下你想怎么修改图片');return;}
     state.generating=true; $('#generateBtn').disabled=true; $('#generateBtn').textContent='正在处理…'; $('#canvasPlaceholder').classList.add('hidden'); $('#resultImage').classList.add('hidden'); setProgress(8,'正在提交任务');
     try{
-      const payload={model:MODEL,prompt,images:[state.sourceDataUrl],size:selectedSize(),output_format:'png',thinking:$('#thinking').value,prompt_optimization_mode:$('#optimization').value};
+      const payload={model:MODEL,prompt,images:[...state.sources,...state.references].map(item=>item.data),size:selectedSize(),output_format:'png',thinking:$('#thinking').value,prompt_optimization_mode:$('#optimization').value};
       const raw=await atlas('generate',payload), d=raw.data??raw, id=String(d.id||''); if(!id) throw new Error('AtlasCloud 没有返回任务 ID'); setProgress(14,'任务已创建，等待处理');
       const url=await pollPrediction(id); const item={id,url,prompt,size:payload.size,ratio:selectedRatio(),createdAt:new Date().toISOString()}; state.currentResult=item;
       $('#resultImage').src=url; $('#resultImage').classList.remove('hidden'); $('#resultSubtitle').textContent=`${item.ratio} · ${item.size.replace('*',' × ')}`; $('#addResultAlbumBtn').classList.remove('hidden'); $('#downloadResultBtn').classList.remove('hidden');
@@ -236,7 +267,21 @@
   function bindEvents(){
     $$('.tab').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
     $('#apiBtn').addEventListener('click',openApi); $('#saveKeysBtn').addEventListener('click',saveKeys); $('#clearKeysBtn').addEventListener('click',()=>{localStorage.removeItem(LS.atlas);localStorage.removeItem(LS.deepseek);localStorage.removeItem(LS.proxy);$('#atlasKeyInput').value='';$('#deepseekKeyInput').value='';$('#proxyBaseInput').value='';toast('已清除 API 设置');}); $('#balanceBtn').addEventListener('click',refreshBalance);
-    $('#editorFile').addEventListener('change',e=>setSource(e.target.files?.[0])); const dz=$('#editorDropZone'); ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('dragover')})); ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('dragover')})); dz.addEventListener('drop',e=>setSource(e.dataTransfer.files?.[0]));
+    for(const [input,zone,kind] of [['editorFile','editorDropZone','source'],['referenceFile','referenceDropZone','reference']]){
+      $('#'+input).addEventListener('change',e=>{addInputFiles(e.target.files,kind);e.target.value='';});
+      const dz=$('#'+zone);['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('dragover');}));
+      ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('dragover');}));
+      dz.addEventListener('drop',e=>addInputFiles(e.dataTransfer.files,kind));
+    }
+    for(const id of ['sourceList','referenceList'])$('#'+id).addEventListener('click',e=>{
+      const btn=e.target.closest('[data-input-remove],[data-input-preview]');if(!btn)return;
+      if(state.generating||state.uploading){toast('请等当前处理完成');return;}
+      const kind=btn.dataset.inputRemove||btn.dataset.inputPreview,list=kind==='source'?state.sources:state.references,n=Number(btn.dataset.index);if(!list[n])return;
+      if(btn.dataset.inputRemove){list.splice(n,1);if(kind==='source'&&n===0)syncSource();}
+      else if(kind==='source'){if(n>0){list.unshift(list.splice(n,1)[0]);syncSource();}}
+      else openLightbox(list[n].data);
+      renderInputs();
+    });
     $('#prompt').addEventListener('input',e=>$('#promptCount').textContent=`${e.target.value.length} 字`); $$('.quick-prompts button').forEach(b=>b.addEventListener('click',()=>{const p=$('#prompt');p.value=b.dataset.prompt; p.dispatchEvent(new Event('input'));}));
     $('#ratioGrid').addEventListener('click',e=>{const b=e.target.closest('[data-ratio]');if(!b)return;state.ratio=b.dataset.ratio;renderRatios();updateOutputHint();}); $$('.resolution').forEach(b=>b.addEventListener('click',()=>{state.resolution=b.dataset.resolution;$$('.resolution').forEach(x=>x.classList.toggle('active',x===b));updateOutputHint();})); $('#personProtect').addEventListener('change',()=>{if($('#personProtect').checked&&state.sourceDataUrl)analyzePerson();}); $('#generateBtn').addEventListener('click',generate);
     $('#downloadResultBtn').addEventListener('click',()=>state.currentResult&&downloadUrl(state.currentResult.url)); $('#addResultAlbumBtn').addEventListener('click',()=>state.currentResult&&addToAlbumFromItem(state.currentResult));
