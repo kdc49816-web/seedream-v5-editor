@@ -61,3 +61,12 @@
   .stack-nav .btn{flex:1;min-width:0}
 }
 @media(max-width:390px){.stack-card{width:min(77vw,305px);height:min(49vh,390px)}.stack-viewport{min-height:355px}}
+
+/* Stable composite layers; no live background blur on moving cards. */
+.stack-card{transform-style:flat;will-change:transform,opacity}
+.stack-card-shell{box-shadow:0 3px 9px rgba(24,28,36,.10)}
+.stack-image{transform:none}
+.stack-caption,.review-entry{backdrop-filter:none;-webkit-backdrop-filter:none}
+.stack-caption{background:rgba(12,13,16,.82)}
+.review-entry{background:#fff}
+.stack-card.role-prev{transform:translate3d(calc(-50% + var(--prev-offset,-400px)),-50%,0) scale(.975)}
