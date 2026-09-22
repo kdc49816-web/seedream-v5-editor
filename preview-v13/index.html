@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>Seedream v5.0 Pro Editor · Preview v13</title>
-  <link rel="stylesheet" href="./styles.css" />
+  <link rel="stylesheet" href="./styles.css?v=14" />
 </head>
 <body>
   <div class="app-shell">
@@ -150,7 +150,12 @@
             <span class="stack-counter" id="albumStackCounter">0 / 0</span>
             <span class="stack-hint">右滑上一张 · 左滑下一张 · 首尾循环 · 双击查看</span>
           </div>
-          <div class="stack-viewport"><div class="stack-deck" id="albumStackDeck"></div></div>
+          <div class="stack-viewport">
+            <div class="stack-deck" id="albumStackDeck"></div>
+            <button class="review-entry hidden" id="reviewEntryBtn" type="button" aria-label="给当前照片写评价">
+              <span>评价</span><i aria-hidden="true"></i>
+            </button>
+          </div>
           <div class="stack-nav">
             <button class="btn btn-light" id="stackPrevBtn" type="button">上一张</button>
             <button class="btn btn-light" id="stackNextBtn" type="button">下一张</button>
@@ -189,8 +194,26 @@
     <div class="lightbox-tip">双击 / 双击触控：放大或还原</div>
   </dialog>
 
+  <dialog class="modal review-modal" id="reviewModal">
+    <form method="dialog" class="modal-card review-modal-card" id="reviewForm">
+      <div class="modal-head">
+        <div><span class="eyebrow">PHOTO NOTE</span><h2 id="reviewModalTitle">写评价</h2></div>
+        <button class="icon-btn" value="cancel" aria-label="关闭">×</button>
+      </div>
+      <label for="reviewInput">这张照片的评价</label>
+      <textarea id="reviewInput" maxlength="500" rows="5" placeholder="写下你对这张照片的评价……"></textarea>
+      <div class="review-count"><span id="reviewCount">0</span> / 500</div>
+      <div class="modal-actions review-actions">
+        <button class="btn btn-light hidden" id="deleteReviewBtn" type="button">删除评价</button>
+        <span class="review-actions-spacer"></span>
+        <button class="btn btn-light" value="cancel" type="submit">取消</button>
+        <button class="btn btn-primary" id="saveReviewBtn" type="button">保存</button>
+      </div>
+    </form>
+  </dialog>
+
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./app.js"></script>
-  <script src="./album-card.js?v=13"></script>
+  <script src="./app.js?v=14"></script>
+  <script src="./album-card.js?v=14"></script>
 </body>
 </html>
