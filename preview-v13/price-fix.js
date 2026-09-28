@@ -15,6 +15,52 @@
   const $ = (selector) => document.querySelector(selector);
   let scheduled = false;
 
+  function installBrandIcon() {
+    const iconHref = './seedream-icon.svg?v=1';
+
+    let favicon = document.querySelector('link[rel="icon"]');
+    if (!favicon) {
+      favicon = document.createElement('link');
+      favicon.rel = 'icon';
+      favicon.type = 'image/svg+xml';
+      document.head.appendChild(favicon);
+    }
+    favicon.href = iconHref;
+
+    let touchIcon = document.querySelector('link[rel="apple-touch-icon"]');
+    if (!touchIcon) {
+      touchIcon = document.createElement('link');
+      touchIcon.rel = 'apple-touch-icon';
+      document.head.appendChild(touchIcon);
+    }
+    touchIcon.href = iconHref;
+
+    if (!document.querySelector('meta[name="apple-mobile-web-app-title"]')) {
+      const appTitle = document.createElement('meta');
+      appTitle.name = 'apple-mobile-web-app-title';
+      appTitle.content = 'Seedream';
+      document.head.appendChild(appTitle);
+    }
+
+    const mark = $('.brand-mark');
+    if (mark && !mark.querySelector('img')) {
+      mark.textContent = '';
+      mark.style.background = '#fff';
+      mark.style.padding = '2px';
+      mark.style.overflow = 'hidden';
+      mark.style.border = '1px solid #ececef';
+      const img = document.createElement('img');
+      img.src = iconHref;
+      img.alt = 'Seedream';
+      img.style.width = '100%';
+      img.style.height = '100%';
+      img.style.display = 'block';
+      img.style.objectFit = 'cover';
+      img.style.borderRadius = '11px';
+      mark.appendChild(img);
+    }
+  }
+
   function money(value) {
     return Number(value).toFixed(3);
   }
@@ -72,6 +118,8 @@
   }
 
   function init() {
+    installBrandIcon();
+
     const estimate = $('#costEstimate');
     const details = $('#costDetails');
     if (!estimate || !details) return;
