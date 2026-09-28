@@ -68,6 +68,7 @@
               <div class="field-title"><label for="prompt">告诉它怎么改</label><span id="promptCount">0 字</span></div>
               <textarea id="prompt" rows="7" placeholder="比如：把背景换成雨夜的东京街头，保留人物的脸、姿势和衣服……"></textarea>
               <div class="quick-prompts">
+                <button id="reusePromptBtn" type="button">填入上次提示词</button>
                 <button type="button" data-prompt="提升画面清晰度、细节和质感，保持原始构图与人物身份不变。">画质增强</button>
                 <button type="button" data-prompt="在保持主体身份、姿势和构图基本不变的前提下进行风格化处理。">风格化</button>
                 <button type="button" data-prompt="移除背景并输出干净的透明 PNG，主体边缘自然完整。">去背景</button>
@@ -112,6 +113,7 @@
             <div class="result-head">
               <div><span class="eyebrow">OUTPUT</span><h2>结果画布</h2><p id="resultSubtitle">等待上传原图</p></div>
               <div class="result-actions">
+                <button class="btn btn-light hidden" id="resultPromptBtn" type="button">查看提示词</button>
                 <button class="btn btn-light hidden" id="addResultAlbumBtn" type="button">加入相册</button>
                 <button class="btn btn-light hidden" id="downloadResultBtn" type="button">保存图片</button>
               </div>
@@ -168,6 +170,7 @@
             </button>
           </div>
           <div class="stack-nav">
+            <button class="btn btn-light" id="stackPromptBtn" type="button">查看提示词</button>
             <button class="btn btn-light" id="stackPrevBtn" type="button">上一张</button>
             <button class="btn btn-light" id="stackNextBtn" type="button">下一张</button>
           </div>
@@ -223,8 +226,14 @@
     </form>
   </dialog>
 
+  <dialog class="modal" id="savedPromptModal">
+    <form method="dialog" class="modal-card">
+      <div class="modal-head"><h2>这张图的提示词</h2><button class="icon-btn" aria-label="关闭">×</button></div>
+      <p id="savedPromptText" style="white-space:pre-wrap;overflow-wrap:anywhere;max-height:65vh;overflow:auto"></p>
+    </form>
+  </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./app.js?v=22"></script>
-  <script src="./album-card.js?v=21"></script>
+  <script src="./app.js?v=23"></script>
+  <script src="./album-card.js?v=23"></script>
 </body>
 </html>

@@ -112,7 +112,7 @@ async function assign(el,item,n){
     setTimeout(done,1200);
   });
   if(el._itemId!==id)return;
-  el._ready=true;
+  el._ready=!!(img.complete&&img.naturalWidth);
   const caption=$('.stack-caption',el),review=String(item.review||'').trim();
   caption.textContent=review;caption.classList.toggle('hidden',!review);
   $('.stack-meta strong',el).textContent=item.name||'相册图片';
@@ -140,6 +140,7 @@ function updateCount(){
   $('#albumStackCounter').textContent=(items.length?index+1:0)+' / '+items.length;
   $('#stackPrevBtn').disabled=items.length<=1;$('#stackNextBtn').disabled=items.length<=1;
   updateReviewEntry();
+  const promptBtn=$('#stackPromptBtn');if(promptBtn)promptBtn.disabled=!items.length;
 }
 function currentItem(){return items[index]||null}
 function updateReviewEntry(){
@@ -333,6 +334,9 @@ document.addEventListener('DOMContentLoaded',()=>{
   $('#stackPrevBtn')?.addEventListener('click',()=>program(-1));$('#stackNextBtn')?.addEventListener('click',()=>program(1));
   $('#albumUpload')?.addEventListener('change',()=>setTimeout(()=>{if(view==='stack')refresh()},450));
   document.querySelector('[data-tab="album"]')?.addEventListener('click',()=>setTimeout(()=>{if(view==='stack')refresh()},60));
+  $('#stackPromptBtn')?.addEventListener('click',()=>{
+    const item=currentItem();$('#savedPromptText').textContent=item?.userPrompt??item?.prompt??'这张图片没有保存提示词';$('#savedPromptModal').showModal();
+  });
   $('#reviewEntryBtn')?.addEventListener('click',openReview);
   $('#reviewInput')?.addEventListener('input',e=>{$('#reviewCount').textContent=String(e.target.value.length)});
   $('#saveReviewBtn')?.addEventListener('click',saveReview);
@@ -340,8 +344,19 @@ document.addEventListener('DOMContentLoaded',()=>{
   $('#reviewModal')?.addEventListener('close',()=>{editingReviewId=''});
   setView('grid');
 });
-window.addEventListener('beforeunload',()=>{
-  for(const u of originalUrls.values())URL.revokeObjectURL(u);for(const u of previewUrls.values())URL.revokeObjectURL(u);
-  originalUrls.clear();previewUrls.clear();
-});
+async function recoverVisibleCards(){
+  if(document.hidden||view!=='stack'||active||animating)return;
+  for(const el of cards){
+    if(!el._itemId)continue;
+    const img=el._image;
+    if(img.complete&&img.naturalWidth)continue;
+    el._ready=false;
+  }
+  await prepareNearby();
+  const current=items[index];
+  if($('#lightbox').open&&current?.blob&&!$('#lightboxImage').naturalWidth)$('#lightboxImage').src=originalSrc(current);
+}
+document.addEventListener('visibilitychange',recoverVisibleCards);
+window.addEventListener('pageshow',recoverVisibleCards);
+window.addEventListener('online',recoverVisibleCards);
 })();
