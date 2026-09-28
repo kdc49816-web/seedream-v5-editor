@@ -177,10 +177,32 @@
     $('#ratioGrid').innerHTML=ratios.map(([v,label])=>`<button type="button" class="ratio ${state.ratio===v?'active':''}" data-ratio="${v}">${label}</button>`).join('');
   }
   function selectedRatio(){ return state.ratio==='original' ? (state.sourceDims ? nearestRatio(state.sourceDims.width,state.sourceDims.height) : '1:1') : state.ratio; }
-  function selectedSize(){ const ratio=selectedRatio(); return sizePresets[state.resolution]?.[ratio] || sizePresets[state.resolution]['1:1']; }
-  function updateOutputHint(){ const ratio=selectedRatio(),size=selectedSize(); $('#ratioHint').textContent=state.sourceDims?`${state.sourceDims.width} × ${state.sourceDims.height} → ${ratio}`:'上传后自动识别'; if(state.currentResult) $('#resultSubtitle').textContent=`${ratio} · ${size.replace('*',' × ')}`; }
+  function selectedSize(){ const ratio=selectedRatio(); const resolution=state.resolution==='1K'&&ratio!=='1:1'?'1.5K':state.resolution; return sizePresets[resolution]?.[ratio] || sizePresets[resolution]['1:1']; }
+  function outputCount(){return Math.max(1,Math.min(4,Number($('#outputCount').value)||1))}
+  function estimateCost(size,count,inputs){
+    const [w,h]=size.split('*').map(Number),base=w*h<=2360000?.045:.09,extra=Math.max(0,inputs-1)*.003;
+    return {tier:base===.045?'1.5K':'2K',base,extra,unit:base+extra,total:(base+extra)*count};
+  }
+  function updateCost(){
+    const size=selectedSize(),count=outputCount(),inputs=state.sources.length+state.references.length,cost=estimateCost(size,count,inputs);
+    $('#costEstimate').textContent='预计 $'+cost.total.toFixed(3)+' / '+count+' 张';
+    $('#costDetails').textContent=size.replace('*',' × ')+' · '+cost.tier+'计费档 · 单张 $'+cost.unit.toFixed(3)+(inputs>1?'（含额外输入图 $'+cost.extra.toFixed(3)+'）':'')+(state.resolution==='1K'&&selectedRatio()!=='1:1'?'；此比例使用 1.5K 尺寸':'');
+    if(!state.generating)$('#generateBtn').textContent='生成 '+count+' 张';
+  }
+  let batchResults=[],stopBatch=false;
+  function renderBatch(){
+    const list=$('#batchResults');list.replaceChildren();
+    batchResults.forEach((item,index)=>{
+      const button=document.createElement('button');button.type='button';button.className='batch-result';
+      const img=document.createElement('img');img.src=trackedSrc(item);img.alt='第 '+(index+1)+' 张结果';
+      const label=document.createElement('span');label.textContent='第 '+(index+1)+' 张'+(item.blob?'':' · 待保存');
+      button.append(img,label);button.addEventListener('click',()=>showResult(item));list.append(button);
+    });
+  }
+  function updateOutputHint(){ updateCost(); const ratio=selectedRatio(),size=selectedSize(); $('#ratioHint').textContent=state.sourceDims?`${state.sourceDims.width} × ${state.sourceDims.height} → ${ratio}`:'上传后自动识别'; if(state.currentResult) $('#resultSubtitle').textContent=`${ratio} · ${size.replace('*',' × ')}`; }
 
   function renderInputs(){
+    updateCost();
     for(const [kind,list] of [['source',state.sources],['reference',state.references]]){
       $('#'+kind+'List').innerHTML=list.map((item,i)=>`<div class="input-image-item"><button type="button" data-input-preview="${kind}" data-index="${i}" aria-label="${kind==='source'?'设为主图':'查看参考图'} ${i+1}"><img src="${escapeHtml(item.data)}" alt="${escapeHtml(item.name)}"><span>${kind==='source'?(i===0?'主图':'原图 '+(i+1)):'参考图 '+(i+1)}</span></button><button type="button" class="input-remove" data-input-remove="${kind}" data-index="${i}" aria-label="移除${kind==='source'?'原图':'参考图'} ${i+1}">×</button></div>`).join('');
     }
@@ -271,7 +293,7 @@
 
   async function pollPrediction(id){
     let tries=0; while(tries<120){ await new Promise(r=>setTimeout(r,2500)); const raw=await atlas('prediction',id); const d=raw.data??raw; const status=String(d.status||'processing').toLowerCase();
-      if(status==='completed'){ if(!d.outputs?.[0]) throw new Error('任务完成，但没有返回结果图片'); return d.outputs[0]; }
+      if(status==='completed'){ if(!d.outputs?.[0]) throw new Error('任务完成，但没有返回结果图片'); return d.outputs; }
       if(status==='failed') throw new Error(typeof d.error==='string'?d.error:'图片处理失败'); tries++; setProgress(Math.min(92,18+tries*2),status==='created'?'任务排队中':'Seedream 正在编辑图片');
     } throw new Error('任务等待超时，请到生成记录稍后查看');
   }
@@ -301,27 +323,44 @@
   }
 
   async function generate(){
-    if(state.generating||state.uploading) return; if(!atlasKey()){openApi();toast('先保存 AtlasCloud API Key');return;} if(!state.sourceDataUrl){toast('先上传一张原图');return;} const prompt=buildPrompt(); if(!prompt){toast('写一下你想怎么修改图片');return;}
-    const promptInput=promptSnapshot(),userPrompt=promptText(promptInput); rememberPrompt();
-    state.generating=true; $('#generateBtn').disabled=true; $('#generateBtn').textContent='正在处理…'; $('#canvasPlaceholder').classList.add('hidden'); $('#resultImage').classList.add('hidden'); setProgress(8,'正在提交任务');
+    if(state.generating||state.uploading)return;
+    if(!atlasKey()){openApi();toast('先保存 AtlasCloud API Key');return}
+    if(!state.sourceDataUrl){toast('先上传一张原图');return}
+    const prompt=buildPrompt();if(!prompt){toast('写一下你想怎么修改图片');return}
+    const promptInput=promptSnapshot(),userPrompt=promptText(promptInput),count=outputCount(),ratio=selectedRatio();
+    const payload={model:MODEL,prompt,images:[...state.sources,...state.references].map(item=>item.data),size:selectedSize(),output_format:'png',thinking:$('#thinking').value,prompt_optimization_mode:$('#optimization').value};
+    rememberPrompt();state.generating=true;stopBatch=false;batchResults=[];renderBatch();
+    $('#generateBtn').disabled=true;$('#outputCount').disabled=true;$('#generateBtn').textContent='正在生成…';
+    $('#stopBatchBtn').classList.toggle('hidden',count===1);$('#stopBatchBtn').disabled=false;
+    let completed=0,failure='';
     try{
-      const payload={model:MODEL,prompt,images:[...state.sources,...state.references].map(item=>item.data),size:selectedSize(),output_format:'png',thinking:$('#thinking').value,prompt_optimization_mode:$('#optimization').value};
-      const raw=await atlas('generate',payload), d=raw.data??raw, id=String(d.id||''); if(!id) throw new Error('AtlasCloud 没有返回任务 ID'); setProgress(14,'任务已创建，等待处理');
-      const url=await pollPrediction(id); const item={id,url,prompt,userPrompt,promptInput,size:payload.size,ratio:selectedRatio(),createdAt:new Date().toISOString()};
-      state.currentResult=item;state.history=[item,...state.history.filter(x=>x.id!==id)];
-      setProgress(95,'图片已生成，正在保存到本机');
-      try{
-        const stored=await persistRemoteImage(item,'history');
-        state.history=state.history.map(x=>x.id===id?stored:x);
-        showResult(stored);toast('图片已生成并保存到当前浏览器');
-      }catch(error){
-        showResult(item);$('#resultSubtitle').textContent='本机保存未完成，返回前台会重试';
-        toast('图片已生成，但本机保存未完成，请勿清理浏览器数据');
+      for(let n=0;n<count&&!stopBatch;n++){
+        $('#batchStatus').textContent='正在生成第 '+(n+1)+' / '+count+' 张，已完成 '+completed+' 张';
+        setProgress(8,'正在提交第 '+(n+1)+' 张');
+        // Never retry creation automatically: a lost response may already be billed.
+        const raw=await atlas('generate',payload),d=raw.data??raw,id=String(d.id||'');
+        if(!id)throw new Error('没有收到任务 ID，请先到 AtlasCloud 核对任务');
+        const urls=await pollPrediction(id);
+        for(let k=0;k<urls.length;k++){
+          const item={id:k?id+'-'+k:id,taskId:id,url:urls[k],prompt,userPrompt,promptInput,size:payload.size,ratio,createdAt:new Date().toISOString()};
+          state.history=[item,...state.history.filter(x=>x.id!==item.id)];
+          setProgress(95,'正在保存第 '+(n+1)+' 张');
+          let saved=item;
+          try{saved=await persistRemoteImage(item,'history')}catch{}
+          state.history=state.history.map(x=>x.id===item.id?saved:x);batchResults.push(saved);
+          showResult(saved);if(!saved.blob)$('#resultSubtitle').textContent='本机保存未完成，返回前台会重试';
+          renderBatch();renderCounts();renderHistory();
+        }
+        completed++;
+        $('#processingBox').classList.add('hidden');
       }
-      renderCounts();renderHistory();
-
-    }catch(e){ $('#canvasPlaceholder').classList.remove('hidden'); toast(e.message||'处理失败'); }
-    finally{ state.generating=false; $('#generateBtn').disabled=false; $('#generateBtn').textContent='开始编辑'; setTimeout(()=>setProgress(0,''),350); }
+    }catch(error){failure=error.message||'生成失败'}
+    finally{
+      state.generating=false;$('#generateBtn').disabled=false;$('#outputCount').disabled=false;$('#stopBatchBtn').classList.add('hidden');setProgress(0,'');updateCost();refreshBalance();
+      const unsaved=batchResults.filter(x=>!x.blob).length;
+      $('#batchStatus').textContent='已完成 '+completed+' / '+count+' 张'+(failure?'；后续已停止：'+failure:stopBatch&&completed<count?'；已停止后续生成':'')+(unsaved?'；'+unsaved+' 张尚未保存到本机':'');
+      if(failure)toast(failure);else toast('已完成 '+completed+' 张');
+    }
   }
 
   async function refreshBalance(){
@@ -382,6 +421,8 @@
   function saveKeys(){ const a=$('#atlasKeyInput').value.trim(),d=$('#deepseekKeyInput').value.trim(),p=$('#proxyBaseInput').value.trim().replace(/\/$/,''); a?localStorage.setItem(LS.atlas,a):localStorage.removeItem(LS.atlas); d?localStorage.setItem(LS.deepseek,d):localStorage.removeItem(LS.deepseek); p?localStorage.setItem(LS.proxy,p):localStorage.removeItem(LS.proxy); $('#apiModal').close(); toast('API 设置已保存在这台设备'); refreshBalance(); if(state.sourceDataUrl&&d)analyzePerson(); }
 
   function bindEvents(){
+    $('#outputCount').addEventListener('change',updateCost);
+    $('#stopBatchBtn').addEventListener('click',()=>{stopBatch=true;$('#stopBatchBtn').disabled=true;$('#batchStatus').textContent='当前已提交的图片继续完成，之后不再生成'});
     $('#reusePromptBtn').addEventListener('click',reusePrompt);
     $$('[data-prompt-mode]').forEach(button=>button.addEventListener('click',()=>{updatePromptMode(button.dataset.promptMode);savePromptDrafts()}));
     for(const [key] of promptFields)$('#prompt-'+key).addEventListener('input',rememberPrompt);
@@ -418,7 +459,7 @@
     $('#lightboxClose').addEventListener('click',()=>$('#lightbox').close()); $('#lightbox').addEventListener('click',e=>{if(e.target===$('#lightbox'))$('#lightbox').close();}); const lb=$('#lightboxImage'); const toggleZoom=()=>lb.classList.toggle('zoomed'); lb.addEventListener('dblclick',e=>{e.preventDefault();toggleZoom()}); bindDoubleTap(lb,toggleZoom);
   }
 
-  async function init(){ renderRatios(); bindEvents(); restorePromptDrafts(); await loadData(); refreshBalance(); bindZoomables(); recoverImages(); }
+  async function init(){ renderRatios(); bindEvents(); restorePromptDrafts(); updateCost(); await loadData(); refreshBalance(); bindZoomables(); recoverImages(); }
   document.addEventListener('album-review-changed',e=>{
     const item=state.album.find(x=>x.id===e.detail?.id);if(!item)return;
     const review=String(e.detail?.review||'').trim();if(review)item.review=review;else delete item.review;

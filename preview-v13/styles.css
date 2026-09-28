@@ -119,3 +119,8 @@
 .prompt-fields.hidden{display:none}
 .prompt-fields label{display:grid;gap:7px;font-size:14px;font-weight:600}
 .prompt-fields textarea{width:100%;box-sizing:border-box;min-height:88px;font-size:16px;font-weight:400;resize:vertical}
+
+.cost-box{background:#fff5f5;border-radius:12px;padding:12px;font-size:14px}.cost-box p{margin:6px 0}.cost-box small{display:block;color:#666;line-height:1.5}.cost-box a{display:inline-block;margin-top:6px;color:#b91c1c}
+#outputCount{padding:8px 12px;font-size:16px}.batch-section{padding:12px 16px}.batch-section:has(#batchStatus:empty){padding:0}
+#batchStatus{font-size:14px;overflow-wrap:anywhere}#batchResults{display:flex;gap:8px;overflow-x:auto;margin-top:8px}
+.batch-result{flex:0 0 88px;padding:4px;border:1px solid #ddd;border-radius:10px;background:white}.batch-result img{width:78px;height:78px;object-fit:contain;display:block}.batch-result span{display:block;font-size:12px;margin-top:4px}

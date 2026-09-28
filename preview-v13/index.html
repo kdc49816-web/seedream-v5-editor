@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>Seedream v5.0 Pro Editor · Preview v13</title>
-  <link rel="stylesheet" href="./styles.css?v=24" />
+  <link rel="stylesheet" href="./styles.css?v=25" />
 </head>
 <body>
   <div class="app-shell">
@@ -121,6 +121,12 @@
               </div>
             </div>
 
+            <div class="field-block">
+              <div class="field-title"><label for="outputCount">生成张数</label><select id="outputCount"><option value="1">1 张</option><option value="2">2 张</option><option value="3">3 张</option><option value="4">4 张</option></select></div>
+              <div class="cost-box"><strong id="costEstimate"></strong><p id="costDetails"></p>
+              <small>按公开标价估算，未计优惠。实际扣费以 AtlasCloud 账单为准。</small>
+              <a href="https://www.atlascloud.ai/models/bytedance/seedream-v5.0-pro/edit" target="_blank" rel="noopener noreferrer">查看官方价格</a></div>
+            </div>
             <button class="btn btn-primary generate-btn" id="generateBtn" type="button">开始编辑</button>
           </section>
 
@@ -145,6 +151,7 @@
                 <div class="progress"><i id="progressBar"></i></div>
               </div>
             </div>
+            <div class="batch-section"><p id="batchStatus" role="status" aria-live="polite"></p><button id="stopBatchBtn" type="button" class="btn btn-light hidden">停止后续生成</button><div id="batchResults"></div></div>
             <p class="storage-note">生成记录会保存在当前浏览器中，不再限制 12 条；只有你主动删除才会移除。</p>
           </section>
         </div>
@@ -248,7 +255,7 @@
     </form>
   </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./app.js?v=24"></script>
+  <script src="./app.js?v=25"></script>
   <script src="./album-card.js?v=23"></script>
 </body>
 </html>
