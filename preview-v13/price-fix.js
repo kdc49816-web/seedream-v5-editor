@@ -16,7 +16,8 @@
   let scheduled = false;
 
   function installBrandIcon() {
-    const iconHref = './seedream-icon.svg?v=1';
+    const brandIconHref = './seedream-icon.svg?v=2';
+    const touchIconHref = './seedream-touch-icon.png?v=2';
 
     let favicon = document.querySelector('link[rel="icon"]');
     if (!favicon) {
@@ -25,15 +26,16 @@
       favicon.type = 'image/svg+xml';
       document.head.appendChild(favicon);
     }
-    favicon.href = iconHref;
+    favicon.href = brandIconHref;
 
     let touchIcon = document.querySelector('link[rel="apple-touch-icon"]');
     if (!touchIcon) {
       touchIcon = document.createElement('link');
       touchIcon.rel = 'apple-touch-icon';
+      touchIcon.setAttribute('sizes', '180x180');
       document.head.appendChild(touchIcon);
     }
-    touchIcon.href = iconHref;
+    touchIcon.href = touchIconHref;
 
     if (!document.querySelector('meta[name="apple-mobile-web-app-title"]')) {
       const appTitle = document.createElement('meta');
@@ -50,7 +52,7 @@
       mark.style.overflow = 'hidden';
       mark.style.border = '1px solid #ececef';
       const img = document.createElement('img');
-      img.src = iconHref;
+      img.src = brandIconHref;
       img.alt = 'Seedream';
       img.style.width = '100%';
       img.style.height = '100%';
