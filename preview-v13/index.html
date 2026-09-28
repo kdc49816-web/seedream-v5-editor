@@ -7,7 +7,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <title>Seedream v5.0 Pro Editor · Preview v13</title>
-  <link rel="stylesheet" href="./styles.css?v=22" />
+  <link rel="stylesheet" href="./styles.css?v=24" />
 </head>
 <body>
   <div class="app-shell">
@@ -66,13 +66,28 @@
 
             <div class="field-block">
               <div class="field-title"><label for="prompt">告诉它怎么改</label><span id="promptCount">0 字</span></div>
+              <div class="prompt-mode-switch" role="group" aria-label="提示词填写方式">
+                <button type="button" class="active" data-prompt-mode="whole" aria-pressed="true">整段填写</button>
+                <button type="button" data-prompt-mode="fields" aria-pressed="false">分栏填写</button>
+              </div>
+              <div id="wholePromptPanel">
               <textarea id="prompt" rows="7" placeholder="比如：把背景换成雨夜的东京街头，保留人物的脸、姿势和衣服……"></textarea>
               <div class="quick-prompts">
-                <button id="reusePromptBtn" type="button">填入上次提示词</button>
                 <button type="button" data-prompt="提升画面清晰度、细节和质感，保持原始构图与人物身份不变。">画质增强</button>
                 <button type="button" data-prompt="在保持主体身份、姿势和构图基本不变的前提下进行风格化处理。">风格化</button>
                 <button type="button" data-prompt="移除背景并输出干净的透明 PNG，主体边缘自然完整。">去背景</button>
               </div>
+              </div>
+              <div id="fieldPromptPanel" class="hidden prompt-fields">
+                <label for="prompt-action">动作<textarea id="prompt-action" rows="3" placeholder="例如：坐在椅子上，右手托着下巴"></textarea></label>
+                <label for="prompt-background">背景<textarea id="prompt-background" rows="3" placeholder="例如：夜晚的咖啡店，靠窗的位置"></textarea></label>
+                <label for="prompt-outfit">穿搭<textarea id="prompt-outfit" rows="3" placeholder="例如：杏白色针织衫、深灰色长裤"></textarea></label>
+                <label for="prompt-face">五官与表情<textarea id="prompt-face" rows="3" placeholder="例如：保持原来的长相，微笑但不露牙"></textarea></label>
+                <label for="prompt-extra">额外添加<textarea id="prompt-extra" rows="3" placeholder="例如：桌上加一杯咖啡"></textarea></label>
+                <label for="prompt-negative">负面提示词<textarea id="prompt-negative" rows="3" placeholder="例如：不要路人、文字、多余手指"></textarea></label>
+                <p class="muted">按需填写，留空的部分默认保留主图。</p>
+              </div>
+              <div class="quick-prompts"><button id="reusePromptBtn" type="button">填入上次提示词</button></div>
             </div>
 
             <details class="settings" open>
@@ -233,7 +248,7 @@
     </form>
   </dialog>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./app.js?v=23"></script>
+  <script src="./app.js?v=24"></script>
   <script src="./album-card.js?v=23"></script>
 </body>
 </html>

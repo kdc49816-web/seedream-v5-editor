@@ -109,3 +109,13 @@
 .input-image-item{position:relative;width:76px}.input-image-item>button:first-child{padding:0;width:100%;border:1px solid #ddd;border-radius:9px;overflow:hidden;background:#fff;cursor:pointer}
 .input-image-item img{width:74px;height:74px;object-fit:cover;display:block}.input-image-item span{display:block;font-size:11px;padding:5px 0}
 .input-image-item .input-remove{position:absolute;right:-5px;top:-7px;width:26px;height:26px;border:1px solid #eee;border-radius:50%;color:#d92632;background:white;font-size:18px;cursor:pointer}
+
+/* Prompt input modes */
+.prompt-mode-switch{display:flex;gap:4px;padding:4px;background:#f4f4f5;border-radius:12px;margin-bottom:12px}
+.prompt-mode-switch button{flex:1;border:0;border-radius:9px;background:transparent;color:#555;padding:10px 8px;font:inherit;font-size:14px;cursor:pointer}
+.prompt-mode-switch button.active{background:#e63946;color:#fff}
+.prompt-mode-switch button:focus-visible{outline:2px solid #b91c1c;outline-offset:2px}
+.prompt-fields{display:grid;gap:14px}
+.prompt-fields.hidden{display:none}
+.prompt-fields label{display:grid;gap:7px;font-size:14px;font-weight:600}
+.prompt-fields textarea{width:100%;box-sizing:border-box;min-height:88px;font-size:16px;font-weight:400;resize:vertical}

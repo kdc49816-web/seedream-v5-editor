@@ -75,7 +75,48 @@
     for(const [id,entry] of localUrls)if(!used.has(id)&&!shown.has(entry.url)){URL.revokeObjectURL(entry.url);localUrls.delete(id)}
   }
   const LAST_PROMPT='seedream-last-written-prompt';
-  function rememberPrompt(){const value=$('#prompt').value;if(value.trim())try{localStorage.setItem(LAST_PROMPT,value)}catch{}}
+  const PROMPT_DRAFTS='seedream-prompt-drafts-v1', LAST_STRUCTURED='seedream-last-prompt-v1';
+  const promptFields=[['action','动作'],['background','背景'],['outfit','穿搭'],['face','五官与表情'],['extra','额外添加'],['negative','负面提示词（禁止出现）']];
+  let promptMode='whole';
+  function promptSnapshot(){
+    return {mode:promptMode,text:$('#prompt').value,fields:Object.fromEntries(promptFields.map(([key])=>[key,$('#prompt-'+key).value]))};
+  }
+  function promptText(snapshot=promptSnapshot()){
+    if(snapshot.mode==='whole')return snapshot.text||'';
+    return promptFields.filter(([key])=>String(snapshot.fields?.[key]||'').trim()).map(([key,label])=>'【'+label+'】\n'+snapshot.fields[key].trim()).join('\n\n');
+  }
+  function updatePromptMode(mode){
+    promptMode=mode==='fields'?'fields':'whole';
+    $('#wholePromptPanel').classList.toggle('hidden',promptMode!=='whole');
+    $('#fieldPromptPanel').classList.toggle('hidden',promptMode!=='fields');
+    $$('[data-prompt-mode]').forEach(b=>{const selected=b.dataset.promptMode===promptMode;b.classList.toggle('active',selected);b.setAttribute('aria-pressed',String(selected))});
+    $('#promptCount').textContent=promptText().length+' 字';
+  }
+  function savePromptDrafts(){try{localStorage.setItem(PROMPT_DRAFTS,JSON.stringify(promptSnapshot()))}catch{}}
+  function rememberPrompt(){
+    savePromptDrafts();const snapshot=promptSnapshot(),value=promptText(snapshot);
+    $('#promptCount').textContent=value.length+' 字';
+    if(value.trim())try{localStorage.setItem(LAST_STRUCTURED,JSON.stringify(snapshot));localStorage.setItem(LAST_PROMPT,value)}catch{}
+  }
+  function restorePromptDrafts(){
+    try{
+      const saved=JSON.parse(localStorage.getItem(PROMPT_DRAFTS)||'null');
+      if(saved){$('#prompt').value=saved.text||'';for(const [key] of promptFields)$('#prompt-'+key).value=saved.fields?.[key]||'';updatePromptMode(saved.mode)}
+      else updatePromptMode('whole');
+    }catch{updatePromptMode('whole')}
+  }
+  function reusePrompt(){
+    let saved;try{saved=JSON.parse(localStorage.getItem(LAST_STRUCTURED)||'null')}catch{}
+    if(saved){
+      if(saved.mode==='fields')for(const [key] of promptFields)$('#prompt-'+key).value=saved.fields?.[key]||'';
+      else $('#prompt').value=saved.text||'';
+      updatePromptMode(saved.mode);savePromptDrafts();
+      $(saved.mode==='fields'?'#prompt-action':'#prompt').focus();return;
+    }
+    const value=localStorage.getItem(LAST_PROMPT)||state.history[0]?.userPrompt||state.history[0]?.prompt||'';
+    if(!value){toast('还没有保存过提示词');return}
+    $('#prompt').value=value;updatePromptMode('whole');rememberPrompt();$('#prompt').focus();
+  }
   function showPrompt(item){
     const source=item?.sourceHistoryId?state.history.find(x=>x.id===item.sourceHistoryId):null;
     $('#savedPromptText').textContent=item?.userPrompt||item?.prompt||source?.userPrompt||source?.prompt||'这张图片没有保存提示词';
@@ -215,7 +256,8 @@
   }
 
   function buildPrompt(){
-    let p=$('#prompt').value.trim(); if(!p) return '';
+    let p=promptText().trim(); if(!p) return '';
+    if(promptMode==='fields')p+='\n\n【分栏编辑规则】各栏分别描述对应的编辑要求。未填写的项目默认保持主图原样，但允许为完成已填写要求进行必要的自然调整。负面提示词列出的内容禁止添加或出现。';
     if($('#personProtect').checked && (state.analysis?.has_person || /人物|人像|男人|女人|男生|女生|女孩|男孩|person|people|woman|man/i.test(p))){
       const add=personProtectionText(state.analysis)||'保持人物长相、五官、身份与原图一致；保持身体结构、手部和关节自然，不添加多余肢体。'; p+=`\n\n【智能人物保护】\n${add}`;
     }
@@ -260,12 +302,12 @@
 
   async function generate(){
     if(state.generating||state.uploading) return; if(!atlasKey()){openApi();toast('先保存 AtlasCloud API Key');return;} if(!state.sourceDataUrl){toast('先上传一张原图');return;} const prompt=buildPrompt(); if(!prompt){toast('写一下你想怎么修改图片');return;}
-    const userPrompt=$('#prompt').value; rememberPrompt();
+    const promptInput=promptSnapshot(),userPrompt=promptText(promptInput); rememberPrompt();
     state.generating=true; $('#generateBtn').disabled=true; $('#generateBtn').textContent='正在处理…'; $('#canvasPlaceholder').classList.add('hidden'); $('#resultImage').classList.add('hidden'); setProgress(8,'正在提交任务');
     try{
       const payload={model:MODEL,prompt,images:[...state.sources,...state.references].map(item=>item.data),size:selectedSize(),output_format:'png',thinking:$('#thinking').value,prompt_optimization_mode:$('#optimization').value};
       const raw=await atlas('generate',payload), d=raw.data??raw, id=String(d.id||''); if(!id) throw new Error('AtlasCloud 没有返回任务 ID'); setProgress(14,'任务已创建，等待处理');
-      const url=await pollPrediction(id); const item={id,url,prompt,userPrompt,size:payload.size,ratio:selectedRatio(),createdAt:new Date().toISOString()};
+      const url=await pollPrediction(id); const item={id,url,prompt,userPrompt,promptInput,size:payload.size,ratio:selectedRatio(),createdAt:new Date().toISOString()};
       state.currentResult=item;state.history=[item,...state.history.filter(x=>x.id!==id)];
       setProgress(95,'图片已生成，正在保存到本机');
       try{
@@ -298,7 +340,7 @@
   async function addToAlbumFromItem(item){
     if(state.album.some(x=>x.sourceHistoryId===item.id)){toast('这张图已经在相册里了');return;}
     let blob=item.blob||null; if(!blob && item.url){try{const r=await fetch(item.url);if(r.ok)blob=await r.blob()}catch{}}
-    const albumItem={id:uid('album'),sourceHistoryId:item.id,prompt:item.prompt||'',userPrompt:item.userPrompt??item.prompt??'',blob,url:blob?'':item.url||'',name:'Seedream 生成图',createdAt:new Date().toISOString(),order:state.album.length?Math.max(...state.album.map(x=>x.order??0))+1:0}; await dbPut('album',albumItem); state.album.push(albumItem); renderCounts(); renderAlbum(); toast('已加入相册');
+    const albumItem={id:uid('album'),sourceHistoryId:item.id,promptInput:item.promptInput,prompt:item.prompt||'',userPrompt:item.userPrompt??item.prompt??'',blob,url:blob?'':item.url||'',name:'Seedream 生成图',createdAt:new Date().toISOString(),order:state.album.length?Math.max(...state.album.map(x=>x.order??0))+1:0}; await dbPut('album',albumItem); state.album.push(albumItem); renderCounts(); renderAlbum(); toast('已加入相册');
   }
 
   async function uploadAlbumFiles(files){
@@ -340,11 +382,9 @@
   function saveKeys(){ const a=$('#atlasKeyInput').value.trim(),d=$('#deepseekKeyInput').value.trim(),p=$('#proxyBaseInput').value.trim().replace(/\/$/,''); a?localStorage.setItem(LS.atlas,a):localStorage.removeItem(LS.atlas); d?localStorage.setItem(LS.deepseek,d):localStorage.removeItem(LS.deepseek); p?localStorage.setItem(LS.proxy,p):localStorage.removeItem(LS.proxy); $('#apiModal').close(); toast('API 设置已保存在这台设备'); refreshBalance(); if(state.sourceDataUrl&&d)analyzePerson(); }
 
   function bindEvents(){
-    $('#reusePromptBtn').addEventListener('click',()=>{
-      const value=localStorage.getItem(LAST_PROMPT)||state.history[0]?.userPrompt||state.history[0]?.prompt||'';
-      if(!value){toast('还没有保存过提示词');return}
-      $('#prompt').value=value;$('#prompt').dispatchEvent(new Event('input'));$('#prompt').focus();
-    });
+    $('#reusePromptBtn').addEventListener('click',reusePrompt);
+    $$('[data-prompt-mode]').forEach(button=>button.addEventListener('click',()=>{updatePromptMode(button.dataset.promptMode);savePromptDrafts()}));
+    for(const [key] of promptFields)$('#prompt-'+key).addEventListener('input',rememberPrompt);
     $('#resultPromptBtn').addEventListener('click',()=>showPrompt(state.currentResult));
     document.addEventListener('visibilitychange',()=>{if(!document.hidden)recoverImages()});
     window.addEventListener('pageshow',()=>recoverImages());
@@ -367,7 +407,7 @@
       else openLightbox(list[n].data);
       renderInputs();
     });
-    $('#prompt').addEventListener('input',e=>{$('#promptCount').textContent=`${e.target.value.length} 字`;rememberPrompt()}); $('.quick-prompts button[data-prompt]').forEach(b=>b.addEventListener('click',()=>{const p=$('#prompt');p.value=b.dataset.prompt; p.dispatchEvent(new Event('input'));}));
+    $('#prompt').addEventListener('input',e=>{$('#promptCount').textContent=`${e.target.value.length} 字`;rememberPrompt()}); $$('.quick-prompts button[data-prompt]').forEach(b=>b.addEventListener('click',()=>{const p=$('#prompt');p.value=b.dataset.prompt; p.dispatchEvent(new Event('input'));}));
     $('#ratioGrid').addEventListener('click',e=>{const b=e.target.closest('[data-ratio]');if(!b)return;state.ratio=b.dataset.ratio;renderRatios();updateOutputHint();}); $$('.resolution').forEach(b=>b.addEventListener('click',()=>{state.resolution=b.dataset.resolution;$$('.resolution').forEach(x=>x.classList.toggle('active',x===b));updateOutputHint();})); $('#personProtect').addEventListener('change',()=>{if($('#personProtect').checked&&state.sourceDataUrl)analyzePerson();}); $('#generateBtn').addEventListener('click',generate);
     $('#downloadResultBtn').addEventListener('click',()=>state.currentResult&&downloadUrl(trackedSrc(state.currentResult))); $('#addResultAlbumBtn').addEventListener('click',()=>state.currentResult&&addToAlbumFromItem(state.currentResult));
     $('#historyGrid').addEventListener('click',async e=>{const btn=e.target.closest('[data-action]');if(!btn)return;const card=e.target.closest('.media-card'),item=state.history.find(x=>x.id===card?.dataset.id);if(!item)return;const a=btn.dataset.action;if(a==='prompt')showPrompt(item);if(a==='album')await addToAlbumFromItem(item);if(a==='use')openLightbox(trackedSrc(item));if(a==='delete'&&confirm('删除这条生成记录？')){await dbDelete('history',item.id);state.history=state.history.filter(x=>x.id!==item.id);renderCounts();renderHistory();}});
@@ -378,7 +418,7 @@
     $('#lightboxClose').addEventListener('click',()=>$('#lightbox').close()); $('#lightbox').addEventListener('click',e=>{if(e.target===$('#lightbox'))$('#lightbox').close();}); const lb=$('#lightboxImage'); const toggleZoom=()=>lb.classList.toggle('zoomed'); lb.addEventListener('dblclick',e=>{e.preventDefault();toggleZoom()}); bindDoubleTap(lb,toggleZoom);
   }
 
-  async function init(){ renderRatios(); bindEvents(); await loadData(); refreshBalance(); bindZoomables(); recoverImages(); }
+  async function init(){ renderRatios(); bindEvents(); restorePromptDrafts(); await loadData(); refreshBalance(); bindZoomables(); recoverImages(); }
   document.addEventListener('album-review-changed',e=>{
     const item=state.album.find(x=>x.id===e.detail?.id);if(!item)return;
     const review=String(e.detail?.review||'').trim();if(review)item.review=review;else delete item.review;
