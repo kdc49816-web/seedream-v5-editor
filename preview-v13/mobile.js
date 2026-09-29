@@ -7,19 +7,63 @@
   const standalone = window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone === true;
   const isFormControlFocused = () => document.activeElement?.matches?.('input,textarea,select');
 
+  const statusMeta = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+  if (statusMeta) statusMeta.setAttribute('content','black');
+  const themeMeta = document.querySelector('meta[name="theme-color"]');
+  if (themeMeta) themeMeta.setAttribute('content','#090a0b');
+
   if (standalone) root.classList.add('seedream-standalone');
 
   const style = document.createElement('style');
-  style.id = 'studio-mobile-fix-v34';
+  style.id = 'studio-mobile-fix-v35';
   style.textContent = `
     html,body{background:#090a0b!important}
+    .topbar{
+      background:#090a0b!important;
+      opacity:1!important;
+      filter:none!important;
+      backdrop-filter:none!important;
+      -webkit-backdrop-filter:none!important;
+      box-shadow:none!important;
+    }
+    .brand-wrap,.brand-mark,.brand-copy,.brand-line,.header-actions,.balance-chip{
+      filter:none!important;
+      backdrop-filter:none!important;
+      -webkit-backdrop-filter:none!important;
+    }
     @media(max-width:720px){
       main{padding-bottom:12px!important}
       .tabs{margin-bottom:0!important}
+      .topbar{isolation:isolate!important;transform:none!important}
+      .brand-wrap{min-width:0!important;flex:1 1 auto!important;gap:8px!important}
+      .brand-line h1{font-size:15px!important;letter-spacing:-.45px!important;white-space:nowrap!important}
+      .header-actions{gap:4px!important;flex:0 0 auto!important}
+      .header-actions .btn{height:36px!important;min-height:36px!important;min-width:48px!important;padding:8px 9px!important;font-size:13px!important}
+      .balance-chip{
+        display:flex!important;
+        height:36px!important;
+        min-width:58px!important;
+        max-width:72px!important;
+        padding:4px 7px!important;
+        border:1px solid #34383a!important;
+        border-radius:10px!important;
+        background:#151719!important;
+        align-items:center!important;
+        justify-content:center!important;
+      }
+      .balance-chip span{display:none!important}
+      .balance-chip strong{font-size:12px!important;line-height:1!important;white-space:nowrap!important;color:#f2f3ed!important}
       #albumStackView:has(#albumStackDeck > .empty-state) .stack-topline,
       #albumStackView:has(#albumStackDeck > .empty-state) .stack-nav{display:none!important}
       #albumStackView .stack-viewport:has(#albumStackDeck > .empty-state){height:168px!important;min-height:168px!important;max-height:168px!important}
       #albumStackDeck > .empty-state{height:100%!important;min-height:0!important;border:0!important;border-radius:16px!important;background:#101213!important}
+    }
+    @media(max-width:390px){
+      .brand-mark{width:30px!important;height:30px!important}
+      .brand-line h1{font-size:14px!important}
+      .header-actions .btn{min-width:44px!important;padding:7px 7px!important;font-size:12px!important}
+      .balance-chip{min-width:52px!important;max-width:60px!important;padding:4px 5px!important}
+      .balance-chip strong{font-size:11px!important}
     }
     html.seedream-standalone,
     html.seedream-standalone body{
@@ -31,6 +75,7 @@
       max-height:none!important;
       overflow:hidden!important;
       overscroll-behavior:none!important;
+      background:#090a0b!important;
     }
     html.seedream-standalone .app-shell{
       position:fixed!important;
@@ -42,8 +87,15 @@
       padding-bottom:0!important;
       margin:0!important;
       grid-template-rows:auto minmax(0,1fr) auto!important;
+      background:#090a0b!important;
     }
-    html.seedream-standalone .topbar{grid-row:1!important}
+    html.seedream-standalone .topbar{
+      grid-row:1!important;
+      background:#090a0b!important;
+      backdrop-filter:none!important;
+      -webkit-backdrop-filter:none!important;
+      filter:none!important;
+    }
     html.seedream-standalone main{grid-row:2!important;min-height:0!important;overflow-y:auto!important}
     html.seedream-standalone .tabs{
       grid-row:3!important;
@@ -77,6 +129,13 @@
       setTimeout(() => e.target.scrollIntoView({ block:'nearest', behavior:'smooth' }), 220);
     }
   });
+
+  // The mobile stylesheet used to hide the balance chip entirely.
+  // Keep it visible in the installed app and refresh once after the app has initialized.
+  setTimeout(() => {
+    const balance = $('#balanceBtn');
+    if (balance && $('#balanceValue')?.textContent === '--') balance.click();
+  }, 650);
 
   // GitHub Pages cannot host the account backend. The previous button opened
   // chatgpt.site, which can be blocked by Cloudflare on iOS. In the installed
@@ -199,5 +258,5 @@
     renderLocalAccount();
   }
 
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=34').catch(() => {});
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=35').catch(() => {});
 })();
