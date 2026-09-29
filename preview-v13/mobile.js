@@ -15,7 +15,7 @@
   if (standalone) root.classList.add('seedream-standalone');
 
   const style = document.createElement('style');
-  style.id = 'studio-mobile-fix-v35';
+  style.id = 'studio-mobile-fix-v36';
   style.textContent = `
     html,body{background:#090a0b!important}
     .topbar{
@@ -32,7 +32,7 @@
       -webkit-backdrop-filter:none!important;
     }
     @media(max-width:720px){
-      main{padding-bottom:12px!important}
+      main{padding-bottom:0!important}
       .tabs{margin-bottom:0!important}
       .topbar{isolation:isolate!important;transform:none!important}
       .brand-wrap{min-width:0!important;flex:1 1 auto!important;gap:8px!important}
@@ -96,12 +96,13 @@
       -webkit-backdrop-filter:none!important;
       filter:none!important;
     }
-    html.seedream-standalone main{grid-row:2!important;min-height:0!important;overflow-y:auto!important}
+    html.seedream-standalone main{grid-row:2!important;min-height:0!important;overflow-y:auto!important;padding-bottom:0!important}
     html.seedream-standalone .tabs{
       grid-row:3!important;
       position:relative!important;
       bottom:auto!important;
-      padding-bottom:calc(8px + env(safe-area-inset-bottom))!important;
+      padding-top:8px!important;
+      padding-bottom:calc(22px + env(safe-area-inset-bottom))!important;
       background:#0c0e0f!important;
     }
   `;
@@ -130,16 +131,11 @@
     }
   });
 
-  // The mobile stylesheet used to hide the balance chip entirely.
-  // Keep it visible in the installed app and refresh once after the app has initialized.
   setTimeout(() => {
     const balance = $('#balanceBtn');
     if (balance && $('#balanceValue')?.textContent === '--') balance.click();
   }, 650);
 
-  // GitHub Pages cannot host the account backend. The previous button opened
-  // chatgpt.site, which can be blocked by Cloudflare on iOS. In the installed
-  // GitHub app we keep account switching fully local, so login never leaves app.
   if (location.hostname.endsWith('github.io')) {
     const USERS_KEY = 'seedream-local-users-v2';
     const ACTIVE_KEY = 'seedream-account-id';
@@ -258,5 +254,5 @@
     renderLocalAccount();
   }
 
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=35').catch(() => {});
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=36').catch(() => {});
 })();
