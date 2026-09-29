@@ -15,16 +15,16 @@
       try{
         if('caches' in window){for(const key of await caches.keys())if(key.startsWith('seedream-shell-'))await caches.delete(key)}
         if('serviceWorker' in navigator){
-          const reg=await navigator.serviceWorker.register('../preview-v13/sw.js?v=36',{scope:'../preview-v13/'});
+          const reg=await navigator.serviceWorker.register('../preview-v13/sw.js?v=37',{scope:'../preview-v13/'});
           await reg.update().catch(()=>{});
           if(reg.installing) await new Promise(resolve=>{const w=reg.installing;w.addEventListener('statechange',()=>{if(w.state==='activated'||w.state==='redundant')resolve()})});
         }
       }catch{}
-      location.replace('../preview-v13/?v=36');
+      location.replace('../preview-v13/?v=37');
     })();
   </script>
 </head>
 <body>
-  <p>正在打开 Seedream Studio… <a href="../preview-v13/?v=36">点这里进入</a></p>
+  <p>正在打开 Seedream Studio… <a href="../preview-v13/?v=37">点这里进入</a></p>
 </body>
 </html>
