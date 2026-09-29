@@ -1,5 +1,5 @@
-const CACHE='seedream-shell-37';
-const SHELL=['./','./index.html','./styles.css?v=30','./app.js?v=30','./album-card.js?v=30','./sync.js?v=30','./mobile.js?v=37','./image-recovery.js?v=37','./sd-icon-180-v32.png','./manifest.webmanifest?v=34'];
+const CACHE='seedream-shell-38';
+const SHELL=['./','./index.html','./styles.css?v=30','./app.js?v=30','./album-card.js?v=30','./sync.js?v=30','./mobile.js?v=37','./image-recovery.js?v=38','./sd-icon-180-v32.png','./manifest.webmanifest?v=34'];
 self.addEventListener('install',e=>e.waitUntil(caches.open(CACHE).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('seedream-shell-')&&k!==CACHE).map(k=>caches.delete(k)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',e=>{
@@ -7,7 +7,7 @@ self.addEventListener('fetch',e=>{
   if(e.request.method!=='GET'||u.origin!==self.location.origin||u.pathname.includes('/api/')||!u.pathname.startsWith(base.pathname))return;
   let target=e.request.url;
   if(u.pathname.endsWith('/mobile.js')) target=new URL('./mobile.js?v=37',base).href;
-  if(u.pathname.endsWith('/image-recovery.js')) target=new URL('./image-recovery.js?v=37',base).href;
+  if(u.pathname.endsWith('/image-recovery.js')) target=new URL('./image-recovery.js?v=38',base).href;
   if(u.pathname.endsWith('/manifest.webmanifest')) target=new URL('./manifest.webmanifest?v=34',base).href;
   const req=new Request(target,{method:'GET',headers:e.request.headers,mode:e.request.mode,credentials:e.request.credentials,redirect:'follow',cache:'no-store'});
   e.respondWith(fetch(req).then(r=>{
