@@ -3,7 +3,7 @@
 window.__albumCardVersion='v21-no-blur';
 
 const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
-const DB='seedream-studio-db',VER=1,mod=(n,m)=>((n%m)+m)%m;
+const DB='seedream-studio-db'+(localStorage.getItem('seedream-account-id')?'-'+localStorage.getItem('seedream-account-id'):''),VER=1,mod=(n,m)=>((n%m)+m)%m;
 const clamp=(n,a,b)=>Math.max(a,Math.min(b,n)),lerp=(a,b,p)=>a+(b-a)*p;
 
 let view='grid',items=[],index=0,slots=null;
@@ -74,7 +74,7 @@ function readAlbum(){
     req.onsuccess=()=>{try{
       const db=req.result;if(!db.objectStoreNames.contains('album'))return resolve([]);
       const tx=db.transaction('album','readonly'),q=tx.objectStore('album').getAll();
-      q.onsuccess=()=>resolve((q.result||[]).sort((a,b)=>(a.order??0)-(b.order??0)));q.onerror=()=>resolve([]);
+      q.onsuccess=()=>resolve((q.result||[]).sort((a,b)=>(a.order??0)-(b.order??0)));tx.oncomplete=()=>db.close();q.onerror=()=>resolve([]);
     }catch{resolve([])}};
   });
 }
@@ -82,8 +82,8 @@ function writeAlbum(item){
   return new Promise((resolve,reject)=>{
     const req=indexedDB.open(DB,VER);req.onerror=()=>reject(req.error);req.onupgradeneeded=()=>{};
     req.onsuccess=()=>{try{
-      const db=req.result,tx=db.transaction('album','readwrite');tx.objectStore('album').put(item);
-      tx.oncomplete=()=>resolve();tx.onerror=()=>reject(tx.error);
+      const db=req.result,tx=db.transaction('album','readwrite'),store=tx.objectStore('album'),read=store.get(item.id);read.onsuccess=()=>{if(read.result)store.put({...read.result,review:item.review||''})};
+      tx.oncomplete=()=>{db.close();resolve()};tx.onerror=()=>reject(tx.error);
     }catch(error){reject(error)}};
   });
 }
@@ -350,7 +350,7 @@ async function recoverVisibleCards(){
     if(!el._itemId)continue;
     const img=el._image;
     if(img.complete&&img.naturalWidth)continue;
-    el._ready=false;
+    el._ready=false;const id=el._itemId;for(const map of [originalUrls,previewUrls]){const old=map.get(id);map.delete(id);if(old)setTimeout(()=>URL.revokeObjectURL(old),10000)}previewJobs.delete(id);
   }
   await prepareNearby();
   const current=items[index];

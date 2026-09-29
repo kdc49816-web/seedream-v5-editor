@@ -4,7 +4,7 @@
   const MODEL = 'bytedance/seedream-v5.0-pro/edit';
   const ATLAS_BASE = 'https://api.atlascloud.ai';
   const DEEPSEEK_BASE = 'https://api.deepseek.com';
-  const DB_NAME = 'seedream-studio-db';
+  const DB_NAME = 'seedream-studio-db'+(localStorage.getItem('seedream-account-id')?'-'+localStorage.getItem('seedream-account-id'):'');
   const DB_VERSION = 1;
   const ALBUM_PAGE_SIZE = 20;
   const LS = {
@@ -57,8 +57,9 @@
     return dbPromise;
   }
   async function dbAll(store){const d=await db();return new Promise((res,rej)=>{const tx=d.transaction(store,'readonly');const r=tx.objectStore(store).getAll();r.onsuccess=()=>res(r.result||[]);r.onerror=()=>rej(r.error)});}
-  async function dbPut(store,item){const d=await db();return new Promise((res,rej)=>{const tx=d.transaction(store,'readwrite');tx.objectStore(store).put(item);tx.oncomplete=()=>res();tx.onerror=tx.onabort=()=>rej(tx.error||new Error('图片保存中断'))});}
-  async function dbDelete(store,id){const d=await db();return new Promise((res,rej)=>{const tx=d.transaction(store,'readwrite');tx.objectStore(store).delete(id);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error)});}
+  async function dbPut(store,item){const d=await db();return new Promise((res,rej)=>{const tx=d.transaction(store,'readwrite');tx.objectStore(store).put(item);tx.oncomplete=()=>{res();if(store==='album')document.dispatchEvent(new CustomEvent('album-local-write',{detail:{id:item.id}}))};tx.onerror=tx.onabort=()=>rej(tx.error||new Error('图片保存中断'))});}
+  async function dbUpdate(store,id,change){const d=await db();return new Promise((res,rej)=>{const tx=d.transaction(store,'readwrite'),os=tx.objectStore(store),req=os.get(id);let result=null;req.onsuccess=()=>{if(req.result){result=change(req.result);os.put(result)}};tx.oncomplete=()=>res(result);tx.onerror=tx.onabort=()=>rej(tx.error)})}
+  async function dbDelete(store,id){const d=await db();return new Promise((res,rej)=>{const tx=d.transaction(store,'readwrite');tx.objectStore(store).delete(id);tx.oncomplete=()=>{res();if(store==='album')document.dispatchEvent(new CustomEvent('album-local-delete',{detail:{id}}))};tx.onerror=()=>rej(tx.error)});}
   async function dbClear(store){const d=await db();return new Promise((res,rej)=>{const tx=d.transaction(store,'readwrite');tx.objectStore(store).clear();tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error)});}
 
   const localUrls=new Map();
@@ -126,7 +127,7 @@
     state.currentResult=item;
     const img=$('#resultImage');img.src=trackedSrc(item);img.dataset.fullSrc=img.src;
     img.classList.remove('hidden');$('#canvasPlaceholder').classList.add('hidden');
-    $('#resultSubtitle').textContent=item.blob?'已保存到当前浏览器': '图片已生成，正在保存到本机';
+    $('#resultSubtitle').textContent=item.blob?'已保留本机副本':'已生成';
     for(const id of ['addResultAlbumBtn','downloadResultBtn','resultPromptBtn'])$('#'+id).classList.remove('hidden');
   }
   let recovery=null;
@@ -134,19 +135,14 @@
     if(document.hidden||state.generating)return;
     if(recovery)return recovery;
     recovery=(async()=>{
-      for(const item of state.history.filter(x=>!x.blob&&x.url).slice(0,10)){
-        try{
-          const saved=await persistRemoteImage(item,'history');
-          Object.assign(item,saved);
-          if(state.currentResult?.id===item.id)showResult(item);
-          if(state.tab==='history')renderHistory();
-        }catch{}
+      for(const item of state.album.filter(x=>!x.blob&&x.url)){
+        try{Object.assign(item,await persistRemoteImage(item,'album'));renderAlbum()}catch{}
       }
       for(const img of $$('#resultImage,#historyGrid img,#albumGrid img')){
         if(img.classList.contains('hidden')||(img.complete&&img.naturalWidth))continue;
         const id=img.closest('[data-id]')?.dataset.id;
         const item=img.id==='resultImage'?state.currentResult:[...state.history,...state.album].find(x=>x.id===id);
-        if(item?.blob){img.src=trackedSrc(item);img.dataset.fullSrc=img.src}
+        if(item?.blob){const old=localUrls.get(item.id);localUrls.delete(item.id);img.src=trackedSrc(item);img.dataset.fullSrc=img.src;if(old)setTimeout(()=>URL.revokeObjectURL(old.url),10000)}
       }
     })().finally(()=>{recovery=null});
     return recovery;
@@ -167,11 +163,11 @@
     state.history=(await dbAll('history')).sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));
     state.album=(await dbAll('album')).sort((a,b)=>(a.order??0)-(b.order??0));
     renderCounts(); renderHistory(); renderAlbum();
-    if(state.history[0])showResult(state.history[0]);
+    if(state.history[0]&&!state.currentResult)showResult(state.history[0]);
   }
 
   function renderCounts(){ $('#historyCount').textContent=state.history.length; $('#albumCount').textContent=state.album.length; }
-  function switchTab(tab){ state.tab=tab; $$('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab)); $$('.tab-panel').forEach(p=>p.classList.toggle('active',p.dataset.panel===tab)); if(tab==='history') renderHistory(); if(tab==='album') renderAlbum(); window.scrollTo({top:0,behavior:'smooth'}); }
+  function switchTab(tab){ state.tab=tab; $$('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===tab)); $$('.tab-panel').forEach(p=>p.classList.toggle('active',p.dataset.panel===tab)); if(tab==='history') renderHistory(); if(tab==='album') renderAlbum(); document.querySelector('main').scrollTo({top:0}); }
 
   function renderRatios(){
     $('#ratioGrid').innerHTML=ratios.map(([v,label])=>`<button type="button" class="ratio ${state.ratio===v?'active':''}" data-ratio="${v}">${label}</button>`).join('');
@@ -179,15 +175,27 @@
   function selectedRatio(){ return state.ratio==='original' ? (state.sourceDims ? nearestRatio(state.sourceDims.width,state.sourceDims.height) : '1:1') : state.ratio; }
   function selectedSize(){ const ratio=selectedRatio(); const resolution=state.resolution==='1K'&&ratio!=='1:1'?'1.5K':state.resolution; return sizePresets[resolution]?.[ratio] || sizePresets[resolution]['1:1']; }
   function outputCount(){return Math.max(1,Math.min(4,Number($('#outputCount').value)||1))}
-  function estimateCost(size,count,inputs){
-    const [w,h]=size.split('*').map(Number),base=w*h<=2360000?.045:.09,extra=Math.max(0,inputs-1)*.003;
-    return {tier:base===.045?'1.5K':'2K',base,extra,unit:base+extra,total:(base+extra)*count};
-  }
+  let quoteTimer,quoteSequence=0,quoteController;
+  const quoteCache=new Map();
+  function estimateCost(size,count,inputs){return {size,count,inputs}}
   function updateCost(){
-    const size=selectedSize(),count=outputCount(),inputs=state.sources.length+state.references.length,cost=estimateCost(size,count,inputs);
-    $('#costEstimate').textContent='预计 $'+cost.total.toFixed(3)+' / '+count+' 张';
-    $('#costDetails').textContent=size.replace('*',' × ')+' · '+cost.tier+'计费档 · 单张 $'+cost.unit.toFixed(3)+(inputs>1?'（含额外输入图 $'+cost.extra.toFixed(3)+'）':'')+(state.resolution==='1K'&&selectedRatio()!=='1:1'?'；此比例使用 1.5K 尺寸':'');
+    const size=selectedSize(),count=outputCount(),inputs=Math.max(1,state.sources.length+state.references.length);
+    const seq=++quoteSequence;clearTimeout(quoteTimer);quoteController?.abort();
+    $('#costEstimate').textContent='查询价格…';$('#costDetails').textContent=size.replace('*',' × ');
+    $('#outputSummary').textContent=state.resolution+' · '+selectedRatio();
     if(!state.generating)$('#generateBtn').textContent='生成 '+count+' 张';
+    const key=size+':'+inputs;
+    const display=price=>{if(seq===quoteSequence)$('#costEstimate').textContent='$'+(price*count).toFixed(3)+' / '+count+' 张'};
+    const cached=quoteCache.get(key);if(cached&&Date.now()-cached.at<60000){display(cached.price);return}
+    quoteTimer=setTimeout(async()=>{
+      quoteController=new AbortController();const timer=setTimeout(()=>quoteController.abort(),12000);
+      try{
+        const response=await fetch('https://api.atlascloud.ai/api/v1/model/calculate',{method:'POST',headers:{'Content-Type':'application/json','X-Source-From':'website'},signal:quoteController.signal,body:JSON.stringify({model:MODEL,size,images:Array(inputs).fill('https://example.com/input.png'),output_format:'png',thinking:$('#thinking').value,prompt_optimization_mode:$('#optimization').value})});
+        const data=await response.json();const raw=data?.data?.price;
+        if(!response.ok||raw==null||!Number.isFinite(Number(raw)))throw Error('报价不可用');
+        const price=Number(raw);quoteCache.set(key,{price,at:Date.now()});display(price);
+      }catch{if(seq===quoteSequence)$('#costEstimate').textContent='暂时无法查询价格'}finally{clearTimeout(timer)}
+    },350);
   }
   let batchResults=[],stopBatch=false;
   function renderBatch(){
@@ -195,7 +203,7 @@
     batchResults.forEach((item,index)=>{
       const button=document.createElement('button');button.type='button';button.className='batch-result';
       const img=document.createElement('img');img.src=trackedSrc(item);img.alt='第 '+(index+1)+' 张结果';
-      const label=document.createElement('span');label.textContent='第 '+(index+1)+' 张'+(item.blob?'':' · 待保存');
+      const label=document.createElement('span');label.textContent='第 '+(index+1)+' 张'+'';
       button.append(img,label);button.addEventListener('click',()=>showResult(item));list.append(button);
     });
   }
@@ -304,14 +312,14 @@
     // Keep the result and prompt even if downloading is interrupted.
     await dbPut(store,item);
     let failure;
-    for(let attempt=0;attempt<3;attempt++){
+    for(let attempt=0;attempt<1;attempt++){
       const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
       try{
         const r=await fetch(item.url,{signal:controller.signal});
         if(!r.ok)throw new Error('图片下载失败（'+r.status+'）');
         const blob=await r.blob();
         if(!blob.size||!await imageDimsForBlob(blob))throw new Error('图片数据不完整');
-        const saved={...item,blob};await dbPut(store,saved);return saved;
+        const saved=await dbUpdate(store,item.id,current=>({...current,blob}));if(!saved)throw Error('图片已被删除');document.dispatchEvent(new CustomEvent('album-local-write',{detail:{id:item.id}}));return saved;
       }catch(error){failure=error;if(document.hidden)break}
       finally{clearTimeout(timer)}
     }
@@ -344,11 +352,9 @@
         for(let k=0;k<urls.length;k++){
           const item={id:k?id+'-'+k:id,taskId:id,url:urls[k],prompt,userPrompt,promptInput,size:payload.size,ratio,createdAt:new Date().toISOString()};
           state.history=[item,...state.history.filter(x=>x.id!==item.id)];
-          setProgress(95,'正在保存第 '+(n+1)+' 张');
-          let saved=item;
-          try{saved=await persistRemoteImage(item,'history')}catch{}
-          state.history=state.history.map(x=>x.id===item.id?saved:x);batchResults.push(saved);
-          showResult(saved);if(!saved.blob)$('#resultSubtitle').textContent='本机保存未完成，返回前台会重试';
+          // Show the upstream result immediately; saving must never delay display or the next generation.
+          batchResults.push(item);showResult(item);
+          await dbPut('history',item);
           renderBatch();renderCounts();renderHistory();
         }
         completed++;
@@ -358,7 +364,7 @@
     finally{
       state.generating=false;$('#generateBtn').disabled=false;$('#outputCount').disabled=false;$('#stopBatchBtn').classList.add('hidden');setProgress(0,'');updateCost();refreshBalance();
       const unsaved=batchResults.filter(x=>!x.blob).length;
-      $('#batchStatus').textContent='已完成 '+completed+' / '+count+' 张'+(failure?'；后续已停止：'+failure:stopBatch&&completed<count?'；已停止后续生成':'')+(unsaved?'；'+unsaved+' 张尚未保存到本机':'');
+      $('#batchStatus').textContent='已完成 '+completed+' / '+count+' 张'+(failure?'；后续已停止：'+failure:stopBatch&&completed<count?'；已停止后续生成':'')+'';
       if(failure)toast(failure);else toast('已完成 '+completed+' 张');
     }
   }
@@ -378,8 +384,8 @@
 
   async function addToAlbumFromItem(item){
     if(state.album.some(x=>x.sourceHistoryId===item.id)){toast('这张图已经在相册里了');return;}
-    let blob=item.blob||null; if(!blob && item.url){try{const r=await fetch(item.url);if(r.ok)blob=await r.blob()}catch{}}
-    const albumItem={id:uid('album'),sourceHistoryId:item.id,promptInput:item.promptInput,prompt:item.prompt||'',userPrompt:item.userPrompt??item.prompt??'',blob,url:blob?'':item.url||'',name:'Seedream 生成图',createdAt:new Date().toISOString(),order:state.album.length?Math.max(...state.album.map(x=>x.order??0))+1:0}; await dbPut('album',albumItem); state.album.push(albumItem); renderCounts(); renderAlbum(); toast('已加入相册');
+    let blob=item.blob||null;
+    const albumItem={id:uid('album'),sourceHistoryId:item.id,promptInput:item.promptInput,prompt:item.prompt||'',userPrompt:item.userPrompt??item.prompt??'',blob,url:blob?'':item.url||'',name:'Seedream 生成图',createdAt:new Date().toISOString(),order:state.album.length?Math.max(...state.album.map(x=>x.order??0))+1:0}; await dbPut('album',albumItem); state.album.push(albumItem); renderCounts(); renderAlbum(); toast('已加入相册，正在保存原图');if(!blob){try{Object.assign(albumItem,await persistRemoteImage(albumItem,'album'));renderAlbum();toast('原图已保存')}catch{toast('原图暂未保存，联网后会重试')}}navigator.storage?.persist?.().catch(()=>{});
   }
 
   async function uploadAlbumFiles(files){
@@ -389,7 +395,7 @@
   }
 
   function albumCard(item,index){
-    const src=trackedSrc(item); return `<article class="media-card" data-id="${escapeHtml(item.id)}"><button class="drag-handle" type="button" aria-label="拖动调整顺序">≡</button><img class="media-thumb zoomable" src="${escapeHtml(src)}" data-full-src="${escapeHtml(src)}" alt="${escapeHtml(item.name||'相册图片')}" /><div class="media-info"><span class="meta">${escapeHtml(item.name||'相册图片')}</span><span class="prompt-line">${escapeHtml(formatTime(item.createdAt))}</span></div><div class="reorder-actions"><button type="button" data-action="left">← 前移</button><button type="button" data-action="right">后移 →</button></div><div class="card-actions"><button type="button" data-action="prompt">提示词</button><button type="button" data-action="open">查看</button><button type="button" class="danger" data-action="delete">删除</button></div></article>`;
+    const src=trackedSrc(item); return `<article class="media-card" data-id="${escapeHtml(item.id)}"><button class="drag-handle" type="button" aria-label="拖动调整顺序">≡</button><img class="media-thumb zoomable" src="${escapeHtml(src)}" data-full-src="${escapeHtml(src)}" alt="${escapeHtml(item.name||'相册图片')}" /><div class="media-info"><span class="meta">${escapeHtml(item.name||'相册图片')}${item.blob?'':' · 原图待保存'}</span><span class="prompt-line">${escapeHtml(formatTime(item.createdAt))}</span></div><div class="reorder-actions"><button type="button" data-action="left">← 前移</button><button type="button" data-action="right">后移 →</button></div><div class="card-actions"><button type="button" data-action="prompt">提示词</button><button type="button" data-action="open">查看</button><button type="button" class="danger" data-action="delete">删除</button></div></article>`;
   }
   function renderAlbum(){
     revokeTempUrls(); const totalPages=Math.max(1,Math.ceil(state.album.length/ALBUM_PAGE_SIZE)); state.albumPage=Math.min(Math.max(1,state.albumPage),totalPages); const start=(state.albumPage-1)*ALBUM_PAGE_SIZE; const visible=state.album.slice(start,start+ALBUM_PAGE_SIZE); const grid=$('#albumGrid'); grid.classList.toggle('arranging',state.arranging); grid.innerHTML=visible.map(albumCard).join(''); $('#albumEmpty').classList.toggle('hidden',state.album.length>0); $('#albumPagination').classList.toggle('hidden',state.album.length<=ALBUM_PAGE_SIZE); $('#pageInfo').textContent=`${state.albumPage} / ${totalPages}`; $('#prevPageBtn').disabled=state.albumPage<=1; $('#nextPageBtn').disabled=state.albumPage>=totalPages; $('#arrangeTip').classList.toggle('hidden',!state.arranging); $('#toggleArrangeBtn').textContent=state.arranging?'完成整理':'整理顺序'; bindZoomables(grid); bindAlbumDrag();
@@ -455,7 +461,7 @@
     $('#clearHistoryBtn').addEventListener('click',async()=>{if(!state.history.length)return;if(confirm('清空全部生成记录？相册里的图片不会被删除。')){await dbClear('history');state.history=[];renderCounts();renderHistory();toast('生成记录已清空');}});
     $('#albumUpload').addEventListener('change',e=>{uploadAlbumFiles(e.target.files);e.target.value='';}); $('#toggleArrangeBtn').addEventListener('click',()=>{state.arranging=!state.arranging;renderAlbum();});
     $('#albumGrid').addEventListener('click',async e=>{if(e.target.closest('.drag-handle'))return;const btn=e.target.closest('[data-action]');if(!btn)return;const card=e.target.closest('.media-card'),id=card?.dataset.id,item=state.album.find(x=>x.id===id);if(!item)return;const a=btn.dataset.action;if(a==='prompt')showPrompt(item);if(a==='open')openLightbox(trackedSrc(item));if(a==='delete'&&confirm('从相册删除这张图片？')){await dbDelete('album',id);state.album=state.album.filter(x=>x.id!==id);await normalizeAlbumOrder();renderCounts();renderAlbum();}if(a==='left')await moveAlbum(id,-1);if(a==='right')await moveAlbum(id,1);});
-    $('#prevPageBtn').addEventListener('click',()=>{state.albumPage--;renderAlbum();window.scrollTo({top:0,behavior:'smooth'})}); $('#nextPageBtn').addEventListener('click',()=>{state.albumPage++;renderAlbum();window.scrollTo({top:0,behavior:'smooth'})});
+    $('#prevPageBtn').addEventListener('click',()=>{state.albumPage--;renderAlbum();document.querySelector('main').scrollTo({top:0})}); $('#nextPageBtn').addEventListener('click',()=>{state.albumPage++;renderAlbum();document.querySelector('main').scrollTo({top:0})});
     $('#lightboxClose').addEventListener('click',()=>$('#lightbox').close()); $('#lightbox').addEventListener('click',e=>{if(e.target===$('#lightbox'))$('#lightbox').close();}); const lb=$('#lightboxImage'); const toggleZoom=()=>lb.classList.toggle('zoomed'); lb.addEventListener('dblclick',e=>{e.preventDefault();toggleZoom()}); bindDoubleTap(lb,toggleZoom);
   }
 
@@ -464,5 +470,7 @@
     const item=state.album.find(x=>x.id===e.detail?.id);if(!item)return;
     const review=String(e.detail?.review||'').trim();if(review)item.review=review;else delete item.review;
   });
+  window.seedream={acceptSync:item=>{const old=state.album.find(x=>x.id===item.id);if(old)Object.assign(old,item)},dbUpdate,dbAll,dbPut,dbDelete,loadData,toast,trackedSrc,estimateCost,selectedSize,addToAlbumFromItem};
+  document.addEventListener('album-cloud-loaded',()=>loadData());
   init().catch(e=>{console.error(e);toast('页面初始化失败，请刷新重试');});
 })();
