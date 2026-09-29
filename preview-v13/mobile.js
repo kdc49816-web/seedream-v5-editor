@@ -254,5 +254,13 @@
     renderLocalAccount();
   }
 
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=36').catch(() => {});
+  if (!document.querySelector('script[data-seedream-image-recovery]')) {
+    const recovery = document.createElement('script');
+    recovery.src = './image-recovery.js?v=37';
+    recovery.async = true;
+    recovery.dataset.seedreamImageRecovery = '1';
+    document.head.appendChild(recovery);
+  }
+
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js?v=37').catch(() => {});
 })();
