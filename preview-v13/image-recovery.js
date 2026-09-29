@@ -4,7 +4,7 @@
   const ATLAS = 'https://api.atlascloud.ai';
   const jobs = new Map();
   const objectUrls = new Map();
-  let scanTimer = 0;
+  let scanTimer = 0, reloadTimer = 0;
 
   const sleep = ms => new Promise(r => setTimeout(r, ms));
   const api = () => window.seedream;
@@ -25,6 +25,11 @@
     if (!task || id === task) return 0;
     const m = id.match(new RegExp('^' + task.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '-(\\d+)$'));
     return m ? Number(m[1]) || 0 : 0;
+  }
+
+  function refreshAppState() {
+    clearTimeout(reloadTimer);
+    reloadTimer = setTimeout(() => api()?.loadData?.().catch?.(() => {}), 250);
   }
 
   async function fetchPrediction(item) {
@@ -91,6 +96,7 @@
           if (fresh) {
             url = fresh;
             current = await api().dbUpdate(store, current.id, old => ({ ...old, url: fresh, outputIndex: outputIndex(current) })) || { ...current, url: fresh };
+            refreshAppState();
             try { blob = await blobFrom(fresh); } catch {}
           }
         } catch {}
@@ -98,6 +104,7 @@
 
       if (blob) {
         current = await api().dbUpdate(store, current.id, old => ({ ...old, url, blob, outputIndex: outputIndex(current) })) || { ...current, blob, url };
+        refreshAppState();
       }
       return current;
     })().finally(() => jobs.delete(key));
@@ -119,7 +126,11 @@
       const src = img.dataset.fullSrc || img.currentSrc || img.src || '';
       for (const store of ['history', 'album']) {
         const list = await api().dbAll(store);
-        const item = list.find(x => x.url && (x.url === src || src.includes(encodeURIComponent(x.id)) || src.includes(String(x.taskId || ''))));
+        const item = list.find(x => x.url && (
+          x.url === src ||
+          (x.id && src.includes(encodeURIComponent(String(x.id)))) ||
+          (x.taskId && src.includes(String(x.taskId)))
+        ));
         if (item) return { store, item };
       }
     }
@@ -132,7 +143,7 @@
     try {
       const found = await locate(img);
       if (!found) return;
-      let { store, item } = found;
+      const { store, item } = found;
 
       if (item.blob) {
         setObjectUrl(img, item);
@@ -145,23 +156,17 @@
         return;
       }
 
-      // Even when CORS prevents saving the blob, a fresh task output URL can still render.
-      if (recovered?.url && recovered.url !== img.src) {
-        img.src = recovered.url;
-        img.dataset.fullSrc = recovered.url;
-        return;
-      }
-
-      // Retry the same URL after a short delay. iOS occasionally negative-caches a failed image request.
-      if (item.url) {
-        await sleep(700);
+      // A refreshed Atlas task URL can still be displayed even when CORS blocks blob saving.
+      const retryUrl = recovered?.url || item.url || '';
+      if (retryUrl) {
+        await sleep(500);
         img.removeAttribute('src');
         await sleep(30);
-        img.src = item.url;
-        img.dataset.fullSrc = item.url;
+        img.src = retryUrl;
+        img.dataset.fullSrc = retryUrl;
       }
     } finally {
-      setTimeout(() => { delete img.dataset.recovering; }, 1200);
+      setTimeout(() => { delete img.dataset.recovering; }, 1400);
     }
   }
 
