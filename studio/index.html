@@ -5,16 +5,21 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#090a0b" />
   <title>Seedream Studio</title>
-  <meta http-equiv="refresh" content="0; url=../preview-v13/?v=33" />
-  <link rel="canonical" href="../preview-v13/?v=33" />
   <style>
     html,body{height:100%;margin:0;background:#090a0b;color:#fff;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
     body{display:grid;place-items:center}
     a{color:#d7ff43}
   </style>
-  <script>location.replace('../preview-v13/?v=33');</script>
+  <script>
+    (async()=>{
+      try{
+        if('caches' in window){for(const key of await caches.keys())if(key.startsWith('seedream-shell-'))await caches.delete(key)}
+      }catch{}
+      location.replace('../preview-v13/?v=34');
+    })();
+  </script>
 </head>
 <body>
-  <p>正在打开 Seedream Studio… <a href="../preview-v13/?v=33">点这里进入</a></p>
+  <p>正在打开 Seedream Studio… <a href="../preview-v13/?v=34">点这里进入</a></p>
 </body>
 </html>
